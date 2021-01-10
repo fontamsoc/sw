@@ -1,0 +1,6 @@
+*.o
+*.su
+*.tmp
+*.bin
+*.elf
+version.h
