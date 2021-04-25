@@ -17,6 +17,11 @@ OBJCOPY := ${PREFIX}/bin/${ARCH}-elf-objcopy
 CFLAGS := -Werror -fdata-sections -ffunction-sections -Wl,--gc-sections -Os -g3
 CFLAGS += -fstack-usage
 
+NESYS4DDR_LOADER_PART0_ELF := 0.nexys4ddr.socloader.elf
+NESYS4DDR_LOADER_PART0_BIN := 0.nexys4ddr.socloader.bin
+NESYS4DDR_LOADER_PART1_ELF := 1.nexys4ddr.socloader.elf
+NESYS4DDR_LOADER_PART1_BIN := 1.nexys4ddr.socloader.bin
+
 LOADER_ELF := socloader.elf
 LOADER_BIN := socloader.bin
 
@@ -25,10 +30,29 @@ BIOS_BIN := socbios.bin
 
 .PHONY: artifacts install clean
 
-artifacts: ${LOADER_BIN} ${BIOS_BIN} mksocimg.tmp
+artifacts: ${NESYS4DDR_LOADER_PART0_BIN} ${NESYS4DDR_LOADER_PART1_BIN} \
+		${LOADER_BIN} ${BIOS_BIN} mksocimg.tmp
 	@echo ==== Stack Usage ====
 	@cat *.su
 	@echo =====================
+
+${NESYS4DDR_LOADER_PART0_BIN}: nexys4ddr.loader.h loader.lds nexys4ddr.loader.c
+	${CC} -nostdlib -I ../ ${CFLAGS} -o ${NESYS4DDR_LOADER_PART0_ELF} \
+		-DNESYS4DDR_LOADER_PART0 \
+		-include nexys4ddr.loader.h nexys4ddr.loader.c \
+		-Wl,-Tloader.lds
+	${OBJCOPY} -O binary \
+		--set-section-flags .bss=alloc,load,contents \
+		${NESYS4DDR_LOADER_PART0_ELF} ${NESYS4DDR_LOADER_PART0_BIN}
+
+${NESYS4DDR_LOADER_PART1_BIN}: nexys4ddr.loader.h loader.lds nexys4ddr.loader.c
+	${CC} -nostdlib -I ../ ${CFLAGS} -o ${NESYS4DDR_LOADER_PART1_ELF} \
+		-DNESYS4DDR_LOADER_PART1 \
+		-include nexys4ddr.loader.h nexys4ddr.loader.c \
+		-Wl,-Tloader.lds
+	${OBJCOPY} -O binary \
+		--set-section-flags .bss=alloc,load,contents \
+		${NESYS4DDR_LOADER_PART1_ELF} ${NESYS4DDR_LOADER_PART1_BIN}
 
 ${LOADER_BIN}: loader.h loader.lds loader.c
 	${CC} -nostdlib -I ../ ${CFLAGS} -o ${LOADER_ELF} \
@@ -57,6 +81,8 @@ mksocimg.tmp: mkimg.bash
 install: artifacts
 	mkdir -p ${PREFIX}/{bin,lib}/
 	for f in \
+		${NESYS4DDR_LOADER_PART0_ELF} ${NESYS4DDR_LOADER_PART0_BIN} \
+		${NESYS4DDR_LOADER_PART1_ELF} ${NESYS4DDR_LOADER_PART1_BIN} \
 		${LOADER_ELF} ${LOADER_BIN} \
 		${BIOS_ELF} ${BIOS_BIN} ; do \
 		cp $${f} ${PREFIX}/lib/$${f}; \
@@ -66,6 +92,8 @@ install: artifacts
 
 clean:
 	rm -rf *.o *.su \
+		${NESYS4DDR_LOADER_PART0_ELF} ${NESYS4DDR_LOADER_PART0_BIN} \
+		${NESYS4DDR_LOADER_PART1_ELF} ${NESYS4DDR_LOADER_PART1_BIN} \
 		${LOADER_ELF} ${LOADER_BIN} \
 		${BIOS_ELF} ${BIOS_BIN} \
 		mksocimg.tmp

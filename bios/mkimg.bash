@@ -34,6 +34,10 @@ options:
 -r <rootfs>
 	rootfs-data to write in <image> fourth partition.
 	If not specified, nothing is used.
+
+-t <target>
+	target-name for which image is specific to.
+	If not specified, target specific data are excluded.
 __EOF__
 }
 
@@ -54,6 +58,10 @@ while [ "$1" != "" ]; do
 		-r)
 			shift
 			opt_rootfs="$1"
+			;;
+		-t)
+			shift
+			opt_target="$1"
 			;;
 		-*)
 			echo error: invalid option: $1
@@ -99,6 +107,13 @@ opt_bios=${opt_bios:-"${prefix}/lib/socbios.bin"}
 	exit 1
 }
 
+if [ -n "${opt_target}" ]; then
+	if [ "${opt_target}" != "nexys4ddr" ]; then
+		echo error: unsupported target
+		exit 1
+	fi
+fi
+
 bios_sz=$(($(stat -L -c%s "${opt_bios}")+0))
 kernel_sz=$(($(stat -L -c%s "${opt_kernel}" 2>/dev/null)+0))
 loader_sz=$(($(stat -L -c%s "${opt_loader}")+0))
@@ -126,12 +141,18 @@ BIOSMAXSZ=$(((3*0x1000)-${PARKPUSZ}))
 	exit 1
 }
 
+if [ "${opt_target}" = "nexys4ddr" ]; then
+	firstblkidx=3
+else
+	firstblkidx=1
+fi
+
 set -x
 
 # 32MB to be used by the FAT32 partition.
 fatpart_blksz=$(((32*1024*1024)/512))
 
-dd if=/dev/zero of="${blkdev}" bs=512 count=$((1+${fatpart_blksz}+${bios_blksz}+${kernel_blksz}+${rootfs_blksz})) status=progress
+dd if=/dev/zero of="${blkdev}" bs=512 count=$((${firstblkidx}+${fatpart_blksz}+${bios_blksz}+${kernel_blksz}+${rootfs_blksz})) status=progress
 
 [ -b "${blkdev}" ] || {
 	initial_blkdev=${blkdev}
@@ -159,10 +180,10 @@ label: dos
 unit: sectors
 grain: 512
 # First partition is for storing FPGA bitstream.
-1, ${fatpart_blksz}, e
-, ${bios_blksz}, f8
-, ${kernel_blksz}, 8a
-, ${rootfs_blksz}, 83
+${firstblkidx}, ${fatpart_blksz}, e
+$((${firstblkidx}+${fatpart_blksz})), ${bios_blksz}, f8
+$((${firstblkidx}+${fatpart_blksz}+${bios_blksz})), ${kernel_blksz}, 8a
+$((${firstblkidx}+${fatpart_blksz}+${bios_blksz}+${kernel_blksz})), ${rootfs_blksz}, 83
 __EOF__
 	{
 	echo error: sfdisk failed
@@ -194,7 +215,20 @@ sleep 1 ### Give time to the kernel to create files under /dev/ .
 	exit 1
 }
 
-dd if="${opt_loader}" of="${blkdev}" bs=1 count=446 oflag=sync status=progress
+if [ "${opt_target}" = "nexys4ddr" ]; then
+	nexys4ddr0_opt_loader="${prefix}/lib/0.nexys4ddr.socloader.bin"
+	nexys4ddr1_opt_loader="${prefix}/lib/1.nexys4ddr.socloader.bin"
+	[ -f "${nexys4ddr0_opt_loader}" -a -f "${nexys4ddr1_opt_loader}" ] || {
+		echo error: nexys4ddr loader files missing
+		exit 1
+	}
+	dd if="${nexys4ddr0_opt_loader}" of="${blkdev}" bs=1                 count=446 oflag=sync status=progress
+	dd if="${nexys4ddr1_opt_loader}" of="${blkdev}" bs=1 seek=$((512*1)) count=446 oflag=sync status=progress
+	dd if="${opt_loader}"            of="${blkdev}" bs=1 seek=$((512*2)) count=446 oflag=sync status=progress
+else
+	dd if="${opt_loader}" of="${blkdev}" bs=1 count=446 oflag=sync status=progress
+fi
+
 [ -n "${misc_files}" ] && {
 	tmpdir="$(mktemp -d)"
 	[ -z "${tmpdir}" ] && {
