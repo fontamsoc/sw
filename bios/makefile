@@ -17,10 +17,11 @@ OBJCOPY := ${PREFIX}/bin/${ARCH}-elf-objcopy
 CFLAGS := -Werror -fdata-sections -ffunction-sections -Wl,--gc-sections -Os -g3
 CFLAGS += -fstack-usage
 
-NESYS4DDR_LOADER_PART0_ELF := 0.nexys4ddr.socloader.elf
-NESYS4DDR_LOADER_PART0_BIN := 0.nexys4ddr.socloader.bin
-NESYS4DDR_LOADER_PART1_ELF := 1.nexys4ddr.socloader.elf
-NESYS4DDR_LOADER_PART1_BIN := 1.nexys4ddr.socloader.bin
+# ### Disabled for now.
+#NESYS4DDR_LOADER_PART0_ELF := 0.nexys4ddr.socloader.elf
+#NESYS4DDR_LOADER_PART0_BIN := 0.nexys4ddr.socloader.bin
+#NESYS4DDR_LOADER_PART1_ELF := 1.nexys4ddr.socloader.elf
+#NESYS4DDR_LOADER_PART1_BIN := 1.nexys4ddr.socloader.bin
 
 LOADER_ELF := socloader.elf
 LOADER_BIN := socloader.bin

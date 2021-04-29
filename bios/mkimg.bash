@@ -108,10 +108,11 @@ opt_bios=${opt_bios:-"${prefix}/lib/socbios.bin"}
 }
 
 if [ -n "${opt_target}" ]; then
-	if [ "${opt_target}" != "nexys4ddr" ]; then
+	# ### Disabled for now.
+	#if [ "${opt_target}" != "nexys4ddr" ]; then
 		echo error: unsupported target
 		exit 1
-	fi
+	#fi
 fi
 
 bios_sz=$(($(stat -L -c%s "${opt_bios}")+0))
