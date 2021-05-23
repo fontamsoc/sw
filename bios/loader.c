@@ -122,7 +122,46 @@ extern void* _end;
 
 #define BLKSZ 512 /* block size in bytes */
 
+#define LOADERMEMTEST
+
 __attribute__((noreturn)) void main (void) {
+	unsigned v;
+	#ifdef LOADERMEMTEST
+	// Test memory.
+	v = 2; /* BOOTORIGIN */
+	__asm__ __volatile__ (
+		"ldst %0, %1"
+		: "+r" (v)
+		: "r"  (DEVTBLADDR));
+	if (v != 2 /* WRESET */) { // Skip memory test for WRESET.
+		unsigned memtestsz = 1 /* RAMCACHESZ */;
+		__asm__ __volatile__ (
+			"ldst %0, %1"
+			: "+r" (memtestsz)
+			: "r"  (DEVTBLADDR));
+		memtestsz *= (4 /* Test more than the RAM cache to guaranty actual RAM access */ * sizeof(unsigned long));
+		for (v = 0; v < memtestsz; v += sizeof(unsigned long)) {
+			unsigned w = (KERNELADDR + v);
+			unsigned u = ((~v)^w);
+			*(unsigned long *)w = u;
+		}
+		for (v = 0; v < memtestsz; v += sizeof(unsigned long)) {
+			unsigned w = (KERNELADDR + v);
+			unsigned u = ((~v)^w);
+			__asm__ __volatile__ (
+				"ldst %0, %1"
+				: "+r" (w)
+				: "r"  (w));
+			if (w != u) {
+				__asm__ __volatile__ (
+					"ldst %0, %1"
+					: "+r" (((unsigned long){2}) /* CRESET */)
+					: "r"  (DEVTBLADDR+sizeof(unsigned long)));
+			}
+		}
+	}
+	#endif
+	// Relocate ourself.
 	uintcpy (
 		(void *)KERNELADDR,
 		(void *)BLKDEVADDR,
@@ -133,18 +172,16 @@ __attribute__((noreturn)) void main (void) {
 		"add %%sr, %0; add %%sp, %0; add %%rp, %0\n"
 		"j %%sr\n"
 		"0:\n" :: "r"((unsigned long)KERNELADDR - (unsigned long)BLKDEVADDR));
-
+	// Read MBR.
 	blkdev_read(0);
 	unsigned long bios_lba_begin = ((mbr_t *)(BLKDEVADDR))->partition_entry[BIOSPART].lba_begin;
 	unsigned long bios_sect_cnt = ((mbr_t *)(BLKDEVADDR))->partition_entry[BIOSPART].sect_cnt;
 	unsigned long bios_lba_end = bios_lba_begin + bios_sect_cnt -1;
-
-	// Load bios.
-	unsigned p = BIOSADDR;
-	for (; bios_lba_begin <= bios_lba_end; ++bios_lba_begin) {
+	// Load BIOS.
+	for (v = BIOSADDR; bios_lba_begin <= bios_lba_end; ++bios_lba_begin) {
 		blkdev_read(bios_lba_begin);
-		p = (unsigned long)uintcpy ((void *)p, BLKDEVADDR, BLKSZ/sizeof(unsigned long));
+		v = (unsigned long)uintcpy ((void *)v, BLKDEVADDR, BLKSZ/sizeof(unsigned long));
 	}
-
+	// Jump to loaded BIOS.
 	goto *(void *)BIOSADDR;
 }
