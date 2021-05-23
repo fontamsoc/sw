@@ -12,9 +12,10 @@
 ENTRY(_start)
 
 MBR_BOOTCODE_SIZE = 446;
-BLKDEV_READ_SIZE = 24; /* obtained from `pu32-elf-readelf -a` */
-BLKDEV_READ_ADDR = (MBR_BOOTCODE_SIZE - BLKDEV_READ_SIZE);
-BLKDEV_READ_ADDR = (BLKDEV_READ_ADDR - (BLKDEV_READ_ADDR % 8)); /* Align to 64bits */
+MBR_BOOTCODE_SIZE = (MBR_BOOTCODE_SIZE - (MBR_BOOTCODE_SIZE % 8)); /* Align to 64bits */
+BLKDEV_READ_FUNC_SIZE = 24; /* obtained from `pu32-elf-readelf -a` */
+BLKDEV_READ_FUNC_ADDR = (MBR_BOOTCODE_SIZE - BLKDEV_READ_FUNC_SIZE);
+BLKDEV_READ_FUNC_ADDR = (BLKDEV_READ_FUNC_ADDR - (BLKDEV_READ_FUNC_ADDR % 8)); /* Align to 64bits */
 
 SECTIONS {
 	PROVIDE (__executable_start = SEGMENT_START("text-segment", 0x0));
@@ -120,7 +121,7 @@ SECTIONS {
 	. = ALIGN(8);
 	. = SEGMENT_START("ldata-segment", .);
 	. = ALIGN(8);
-	. = BLKDEV_READ_ADDR;
+	. = BLKDEV_READ_FUNC_ADDR;
 	.blkdev_read : {
 		*(.blkdev_read)
 	}
