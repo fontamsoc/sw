@@ -254,8 +254,8 @@ __attribute__((noreturn)) void main (void) {
 
 	__asm__ __volatile__ (
 		"cpy %%sp, %0\n"
-		"icacherst\n"
 		"dcacherst\n"
+		"icacherst\n"
 		"jl %%rp, %1\n"
 		:: "r"(p), "r"(KERNELADDR));
 
