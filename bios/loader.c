@@ -122,45 +122,64 @@ extern void* _end;
 
 #define BLKSZ 512 /* block size in bytes */
 
-#define LOADERMEMTEST
+unsigned long saved_sp __attribute__((used));
 
 __attribute__((noreturn)) void main (void) {
 	unsigned v;
-	#ifdef LOADERMEMTEST
+	#define LDRMEMINIT
+	#ifdef LDRMEMINIT
 	// Test memory.
 	v = 2; /* BOOTORIGIN */
 	__asm__ __volatile__ (
 		"ldst %0, %1"
 		: "+r" (v)
 		: "r"  (DEVTBLADDR));
-	if (v != 2 /* WRESET */) { // Skip memory test for WRESET.
-		unsigned memtestsz = 1 /* RAMCACHESZ */;
+	if (v != 2 /* WRESET */) { // Skip memory initialization for WRESET.
+		unsigned x = 3 /* PRELDRADDR */;
 		__asm__ __volatile__ (
 			"ldst %0, %1"
-			: "+r" (memtestsz)
+			: "+r" (x)
 			: "r"  (DEVTBLADDR));
-		memtestsz *= (4 /* Test more than the RAM cache to guaranty actual RAM access */ * sizeof(unsigned long));
-		for (v = 0; v < memtestsz; v += sizeof(unsigned long)) {
-			unsigned w = (KERNELADDR + v);
-			unsigned u = ((~v)^w);
-			*(unsigned long *)w = u;
-		}
-		for (v = 0; v < memtestsz; v += sizeof(unsigned long)) {
-			unsigned w = (KERNELADDR + v);
-			unsigned u = ((~v)^w);
+		if (x) {
+			__asm__ __volatile__ (
+				"rli16 %%sr, saved_sp\n"
+				"st %%sp, %%sr\n"
+				"jl %%rp, %0\n"
+				"dcacherst; icacherst\n"
+				"rli16 %%sr, saved_sp\n"
+				"ld %%sp, %%sr\n"
+				:: "r"(x));
+			// Reset %ksl to enable caching throughout the memory
+			// region where the loader and BIOS will be running.
+			__asm__ __volatile__ ("li %sr, ("__xstr__(KERNELADDR)"+512); setksl %sr");
+			x = 1 /* RAMCACHESZ */;
 			__asm__ __volatile__ (
 				"ldst %0, %1"
-				: "+r" (w)
-				: "r"  (w));
-			if (w != u) {
+				: "+r" (x)
+				: "r"  (DEVTBLADDR));
+			x *= (4 /* Test more than the RAM cache to guaranty actual RAM access */ * sizeof(unsigned long));
+			for (v = 0; v < x; v += sizeof(unsigned long)) {
+				unsigned w = (KERNELADDR + v);
+				unsigned u = ((~v)^w);
+				*(unsigned long *)w = u;
+			}
+			for (v = 0; v < x; v += sizeof(unsigned long)) {
+				unsigned w = (KERNELADDR + v);
+				unsigned u = ((~v)^w);
 				__asm__ __volatile__ (
 					"ldst %0, %1"
-					: "+r" (((unsigned long){2}) /* CRESET */)
-					: "r"  (DEVTBLADDR+sizeof(unsigned long)));
+					: "+r" (w)
+					: "r"  (w));
+				if (w != u) {
+					__asm__ __volatile__ (
+						"ldst %0, %1"
+						: "+r" (((unsigned long){2}) /* CRESET */)
+						: "r"  (DEVTBLADDR+sizeof(unsigned long)));
+				}
 			}
 		}
 	}
-	#endif
+	#endif /* LDRMEMINIT */
 	// Relocate ourself.
 	uintcpy (
 		(void *)KERNELADDR,
