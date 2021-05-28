@@ -149,6 +149,10 @@ __attribute__((noreturn)) void main (void) {
 				"rli16 %%sr, saved_sp\n"
 				"ld %%sp, %%sr\n"
 				:: "r"(x));
+			__asm__ __volatile__ (
+				"ldst %0, %1"
+				: "+r" (((unsigned long){3}) /* RRESET */)
+				: "r"  (DEVTBLADDR+sizeof(unsigned long)));
 			// Reset %ksl to enable caching throughout the memory
 			// region where the loader and BIOS will be running.
 			__asm__ __volatile__ ("li %sr, ("__xstr__(KERNELADDR)"+512); setksl %sr");
