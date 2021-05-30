@@ -144,15 +144,16 @@ __attribute__((noreturn)) void main (void) {
 			__asm__ __volatile__ (
 				"rli16 %%sr, saved_sp\n"
 				"st %%sp, %%sr\n"
-				"jl %%rp, %0\n"
+				::: "memory");
+			((void(*)(void))x)();
+			__asm__ __volatile__ (
 				"dcacherst; icacherst\n"
 				"rli16 %%sr, saved_sp\n"
 				"ld %%sp, %%sr\n"
-				:: "r"(x));
+				::: "memory");
 			__asm__ __volatile__ (
-				"ldst %0, %1"
-				: "+r" (((unsigned long){3}) /* RRESET */)
-				: "r"  (DEVTBLADDR+sizeof(unsigned long)));
+				"li8 %%sr, 3 /* RRESET */; ldst %%sr, %0"
+				:: "r" (DEVTBLADDR+sizeof(unsigned long)));
 			// Reset %ksl to enable caching throughout the memory
 			// region where the loader and BIOS will be running.
 			__asm__ __volatile__ ("li %sr, ("__xstr__(KERNELADDR)"+512); setksl %sr");
@@ -164,21 +165,20 @@ __attribute__((noreturn)) void main (void) {
 			x *= (4 /* Test more than the RAM cache to guaranty actual RAM access */ * sizeof(unsigned long));
 			for (v = 0; v < x; v += sizeof(unsigned long)) {
 				unsigned w = (KERNELADDR + v);
-				unsigned u = ((~v)^w);
+				unsigned u = (/*(~v)^*/w);
 				*(unsigned long *)w = u;
 			}
 			for (v = 0; v < x; v += sizeof(unsigned long)) {
 				unsigned w = (KERNELADDR + v);
-				unsigned u = ((~v)^w);
+				unsigned u = (/*(~v)^*/w);
 				__asm__ __volatile__ (
 					"ldst %0, %1"
 					: "+r" (w)
 					: "r"  (w));
 				if (w != u) {
 					__asm__ __volatile__ (
-						"ldst %0, %1"
-						: "+r" (((unsigned long){2}) /* CRESET */)
-						: "r"  (DEVTBLADDR+sizeof(unsigned long)));
+						"li8 %%sr, 2 /* CRESET */; ldst %%sr, %0"
+						:: "r" (DEVTBLADDR+sizeof(unsigned long)));
 				}
 			}
 		}
