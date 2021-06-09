@@ -128,58 +128,51 @@ __attribute__((noreturn)) void main (void) {
 	unsigned v;
 	#define LDRMEMINIT
 	#ifdef LDRMEMINIT
-	// Test memory.
-	v = 2; /* BOOTORIGIN */
+	// Initialize and test memory.
+	unsigned x = 3 /* PRELDRADDR */;
 	__asm__ __volatile__ (
 		"ldst %0, %1"
-		: "+r" (v)
+		: "+r" (x)
 		: "r"  (DEVTBLADDR));
-	if (v != 2 /* WRESET */) { // Skip memory initialization for WRESET.
-		unsigned x = 3 /* PRELDRADDR */;
+	if (x) {
+		__asm__ __volatile__ (
+			"rli16 %%sr, saved_sp\n"
+			"st %%sp, %%sr\n"
+			::: "memory");
+		((void(*)(void))x)();
+		__asm__ __volatile__ (
+			"dcacherst; icacherst\n"
+			"rli16 %%sr, saved_sp\n"
+			"ld %%sp, %%sr\n"
+			::: "memory");
+		__asm__ __volatile__ (
+			"li8 %%sr, 3 /* RRESET */; ldst %%sr, %0"
+			:: "r" (DEVTBLADDR+sizeof(unsigned long)));
+		// Reset %ksl to enable caching throughout the memory
+		// region where the loader and BIOS will be running.
+		__asm__ __volatile__ ("li %sr, ("__xstr__(KERNELADDR)"+512); setksl %sr");
+		x = 1 /* RAMCACHESZ */;
 		__asm__ __volatile__ (
 			"ldst %0, %1"
 			: "+r" (x)
 			: "r"  (DEVTBLADDR));
-		if (x) {
-			__asm__ __volatile__ (
-				"rli16 %%sr, saved_sp\n"
-				"st %%sp, %%sr\n"
-				::: "memory");
-			((void(*)(void))x)();
-			__asm__ __volatile__ (
-				"dcacherst; icacherst\n"
-				"rli16 %%sr, saved_sp\n"
-				"ld %%sp, %%sr\n"
-				::: "memory");
-			__asm__ __volatile__ (
-				"li8 %%sr, 3 /* RRESET */; ldst %%sr, %0"
-				:: "r" (DEVTBLADDR+sizeof(unsigned long)));
-			// Reset %ksl to enable caching throughout the memory
-			// region where the loader and BIOS will be running.
-			__asm__ __volatile__ ("li %sr, ("__xstr__(KERNELADDR)"+512); setksl %sr");
-			x = 1 /* RAMCACHESZ */;
+		x *= (4 /* Test more than the RAM cache to guaranty actual RAM access */ * sizeof(unsigned long));
+		for (v = 0; v < x; v += sizeof(unsigned long)) {
+			unsigned w = (KERNELADDR + v);
+			unsigned u = (/*(~v)^*/w);
+			*(unsigned long *)w = u;
+		}
+		for (v = 0; v < x; v += sizeof(unsigned long)) {
+			unsigned w = (KERNELADDR + v);
+			unsigned u = (/*(~v)^*/w);
 			__asm__ __volatile__ (
 				"ldst %0, %1"
-				: "+r" (x)
-				: "r"  (DEVTBLADDR));
-			x *= (4 /* Test more than the RAM cache to guaranty actual RAM access */ * sizeof(unsigned long));
-			for (v = 0; v < x; v += sizeof(unsigned long)) {
-				unsigned w = (KERNELADDR + v);
-				unsigned u = (/*(~v)^*/w);
-				*(unsigned long *)w = u;
-			}
-			for (v = 0; v < x; v += sizeof(unsigned long)) {
-				unsigned w = (KERNELADDR + v);
-				unsigned u = (/*(~v)^*/w);
+				: "+r" (w)
+				: "r"  (w));
+			if (w != u) {
 				__asm__ __volatile__ (
-					"ldst %0, %1"
-					: "+r" (w)
-					: "r"  (w));
-				if (w != u) {
-					__asm__ __volatile__ (
-						"li8 %%sr, 2 /* CRESET */; ldst %%sr, %0"
-						:: "r" (DEVTBLADDR+sizeof(unsigned long)));
-				}
+					"li8 %%sr, 2 /* CRESET */; ldst %%sr, %0; rli8 %%sr, 0f; 0: j %%sr"
+					:: "r" (DEVTBLADDR+sizeof(unsigned long)));
 			}
 		}
 	}
