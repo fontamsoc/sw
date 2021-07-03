@@ -230,16 +230,17 @@ else
 	dd if="${opt_loader}" of="${blkdev}" bs=1 count=446 oflag=sync status=progress
 fi
 
+mkfs.fat -v -f1 ${blkdev}${isloopdev}1 || {
+	echo error: mkfs.fat failed
+	rm -rf ${tmpdir}
+	[ -n "${isloopdev}" ] && losetup -d "${blkdev}"
+	exit 1
+}
+
 [ -n "${misc_files}" ] && {
 	tmpdir="$(mktemp -d)"
 	[ -z "${tmpdir}" ] && {
 		echo error: mktemp failed
-		[ -n "${isloopdev}" ] && losetup -d "${blkdev}"
-		exit 1
-	}
-	mkfs.fat -v -f1 ${blkdev}${isloopdev}1 || {
-		echo error: mkfs.fat failed
-		rm -rf ${tmpdir}
 		[ -n "${isloopdev}" ] && losetup -d "${blkdev}"
 		exit 1
 	}
