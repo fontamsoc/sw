@@ -966,6 +966,18 @@ void decodeop (uint16_t opcode) {
 			printf("gettlb ");
 			decode2gpr();
 			break;
+		case 0x14:
+			// Specification from the instruction set manual:
+			// getcap %gpr |2|100|rrrr|0000|
+			printf("getcap ");
+			decode1gpr();
+			break;
+		case 0x15:
+			// Specification from the instruction set manual:
+			// getver %gpr |2|101|rrrr|0000|
+			printf("getver ");
+			decode1gpr();
+			break;
 		default: {
 			if (opcode == 0b1001000000000000)
 				printf("preempt");
