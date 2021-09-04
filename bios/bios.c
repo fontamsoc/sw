@@ -263,12 +263,6 @@ __attribute__((noreturn)) void main (void) {
 }
 
 /* void ksysopfaulthdlr (void) */ __asm__ (
-	".data\n"
-	".align "__xstr__(__SIZEOF_POINTER__)"\n"
-	".type iskfault, @object\n"
-	"iskfault: .long 0\n"
-	".size    iskfault, (. - iskfault)\n"
-
 	".text\n"
 	".global  ksysopfaulthdlr\n"
 	".type    ksysopfaulthdlr, @function\n"
@@ -301,22 +295,21 @@ __attribute__((noreturn)) void main (void) {
 	"cpy %1, %2; inc8 %1, "__xstr__(__SIZEOF_POINTER__)"\n"
 	"st %1, %2\n"
 
-	"cpy %2, %sp; rli %sr, 1f; j %sr\n"
+	"cpy %1, %sp; rli %sr, 1f; j %sr\n"
 	"0:\n" /* we branch here to skip saving registers */
-	"li %2, 0\n"
+	"li %1, 0\n"
 	"1:\n" /* we branch here when registers were saved */
-	"rli %sr, iskfault; st %2, %sr\n"
 
 	// Call instruction handlers based on the value of %sysopcode.
-	// void opcodehdlr (unsigned long opcode, savedkctx *kctx);
+	// void opcodehdlr (savedkctx *kctx, unsigned long opcode);
 	// When argument kctx is null, ksysopfault occured in usermode.
-	"getsysopcode %1\n"
-	"li %3, 0x01; seq %3, %1; rli %sr, 0f; jz %3, %sr; rli %rp, 1f; rli %sr, syscallhdlr; j %sr; 0:\n"
-	"li %3, 0xfc; cpy %4, %3; and %4, %1; seq %3, %4; rli %sr, 0f; jz %3, %sr; rli %rp, 1f; rli %sr, cldsthdlr; j %sr; 0:\n"
-	"li %3, 0xd8; cpy %4, %3; and %4, %1; seq %3, %4; rli %sr, 0f; jz %3, %sr; rli %rp, 1f; rli %sr, floathdlr; j %sr; 0:\n"
+	"getsysopcode %2\n"
+	"li %3, 0x01; seq %3, %2; rli %sr, 0f; jz %3, %sr; rli %rp, 1f; rli %sr, syscallhdlr; j %sr; 0:\n"
+	"li %3, 0xfc; cpy %4, %3; and %4, %2; seq %3, %4; rli %sr, 0f; jz %3, %sr; rli %rp, 1f; rli %sr, cldsthdlr; j %sr; 0:\n"
+	"li %3, 0xd8; cpy %4, %3; and %4, %2; seq %3, %4; rli %sr, 0f; jz %3, %sr; rli %rp, 1f; rli %sr, floathdlr; j %sr; 0:\n"
 	"rli %sr, badopcode; jl %rp, %sr\n"
 
-	"1: rli %sr, iskfault; ld %1, %sr; rli %sr, 0f; jz %1, %sr\n"
+	"1: rli %sr, 0f; jz %1, %sr\n"
 
 	"ld %15, %sp; inc8 %sp, "__xstr__(__SIZEOF_POINTER__)"\n"
 	"ld %14, %sp; inc8 %sp, "__xstr__(__SIZEOF_POINTER__)"\n"
@@ -362,14 +355,15 @@ typedef union {
 	unsigned long r[16];
 } savedkctx;
 
-void badopcode (unsigned long opcode, savedkctx *kctx) {
+savedkctx * badopcode (savedkctx *kctx, unsigned long opcode) {
 	printstr("badopcode: "); printu8hex(opcode); putchar(' '); printu8hex(opcode>>8); putchar('\n');
 	parkpu();
+	return kctx;
 }
 
 #include <mutex/mutex.h>
 
-void cldsthdlr (unsigned long opcode, savedkctx *kctx) {
+savedkctx * cldsthdlr (savedkctx *kctx, unsigned long opcode) {
 
 	unsigned long gpr1 = ((opcode & 0xf000) >> 12), gpr2;
 	unsigned long srval, gpr1val, gpr2val;
@@ -467,9 +461,11 @@ void cldsthdlr (unsigned long opcode, savedkctx *kctx) {
 		case 14: __asm__ __volatile__ ("setugpr %%14, %0\n" :: "r"(gpr1val)); break;
 		case 15: __asm__ __volatile__ ("setugpr %%15, %0\n" :: "r"(gpr1val)); break;
 	}
+
+	return kctx;
 }
 
-void floathdlr (unsigned long opcode, savedkctx *kctx) {
+savedkctx * floathdlr (savedkctx *kctx, unsigned long opcode) {
 
 	unsigned long gpr1 = ((opcode & 0xf000) >> 12);
 	unsigned long gpr2 = ((opcode & 0x0f00) >> 8);
@@ -541,7 +537,7 @@ void floathdlr (unsigned long opcode, savedkctx *kctx) {
 			break; }
 		#endif
 		default: {
-			badopcode (opcode, kctx);
+			badopcode (kctx, opcode);
 			break; }
 	}
 
@@ -565,6 +561,8 @@ void floathdlr (unsigned long opcode, savedkctx *kctx) {
 		case 14: __asm__ __volatile__ ("setugpr %%14, %0\n" :: "r"(gpr1val.i)); break;
 		case 15: __asm__ __volatile__ ("setugpr %%15, %0\n" :: "r"(gpr1val.i)); break;
 	}
+
+	return kctx;
 }
 
 unsigned long hwdrvblkdev_blkoffs[MAXCORECNT] = {
@@ -573,7 +571,7 @@ unsigned long hwdrvblkdev_blkoffs[MAXCORECNT] = {
 
 #include <hwdrvintctrl/hwdrvintctrl.h>
 
-void syscallhdlr (unsigned long _, savedkctx *kctx) {
+savedkctx * syscallhdlr (savedkctx *kctx, unsigned long _) {
 
 	unsigned long sr; // %sr: syscall number.
 	unsigned long r1; // %r1: arg1.
@@ -799,4 +797,6 @@ void syscallhdlr (unsigned long _, savedkctx *kctx) {
 			break;
 		}
 	}
+
+	return kctx;
 }
