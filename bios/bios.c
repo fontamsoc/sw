@@ -179,6 +179,10 @@ __attribute__((noreturn)) void main (void) {
 	__asm__ __volatile__ (
 		"rli %sr, ksysopfaulthdlr\n"
 		"setksysopfaulthdlr %sr\n");
+	// Save ksysopfaulthdlr address to be retrieved from kernel environment.
+	extern void *___ishw;
+	void ksysopfaulthdlr (void);
+	*(unsigned long *)((void *)&___ishw + 8/*sizeof("___ISHW=")*/) = (unsigned long)ksysopfaulthdlr;
 
 	extern void *__executable_start, *_end;
 
@@ -249,7 +253,8 @@ __attribute__((noreturn)) void main (void) {
 	p[1] = (unsigned long)"";
 	p[2] = (unsigned long)&kernelarg_start;
 	p[3] = 0;
-	p[4] = (unsigned long)("ISHW=");
+	extern void *___ishw;
+	p[4] = (unsigned long)&___ishw;
 	p[5] = 0;
 
 	__asm__ __volatile__ (
@@ -263,6 +268,12 @@ __attribute__((noreturn)) void main (void) {
 }
 
 /* void ksysopfaulthdlr (void) */ __asm__ (
+	".data\n"
+	".align "__xstr__(__SIZEOF_POINTER__)"\n"
+	".type ___ishw, @object\n"
+	"___ishw: .ascii \"___ISHW=________\"\n"
+	".size    ___ishw, (. - ___ishw)\n"
+
 	".text\n"
 	".global  ksysopfaulthdlr\n"
 	".type    ksysopfaulthdlr, @function\n"
