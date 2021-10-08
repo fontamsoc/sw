@@ -15,7 +15,7 @@
 typedef struct {
 	// This field is used to prevent more than one threads
 	// from incrementing the field ticket at the same time.
-	unsigned long lock;
+	volatile unsigned long lock;
 	// The fields ticket and current are used to insure that
 	// each thread having called mutex_lock() on the same mutex,
 	// get a lock on the mutex in the order they called mutex_lock().
@@ -25,8 +25,8 @@ typedef struct {
 	// saved from the field ticket.
 	// The field current is incremented everytime a thread
 	// calls mutex_unlock().
-	unsigned long ticket;
-	unsigned long current;
+	volatile unsigned long ticket;
+	volatile unsigned long current;
 } mutex;
 
 // Define MUTEX_CHECK_ENOUGH_TICKET if there could be

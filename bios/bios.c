@@ -413,18 +413,18 @@ savedkctx * cldsthdlr (savedkctx *kctx, unsigned long opcode) {
 		case 0xfc: { // cldst8
 			mutex *m = &cldstmutexarray[(gpr2val/sizeof(unsigned long))%(sizeof(cldstmutexarray)/sizeof(mutex))];
 			mutex_lock (m);
-			uint8_t old_gpr2val = *(uint8_t *)gpr2val;
+			uint8_t old_gpr2val = *(volatile uint8_t *)gpr2val;
 			if (old_gpr2val == srval)
-				*(uint8_t *)gpr2val = gpr1val;
+				*(volatile uint8_t *)gpr2val = gpr1val;
 			mutex_unlock (m);
 			gpr1val = old_gpr2val;
 			break; }
 		case 0xfd: { // cldst16
 			mutex *m = &cldstmutexarray[(gpr2val/sizeof(unsigned long))%(sizeof(cldstmutexarray)/sizeof(mutex))];
 			mutex_lock (m);
-			uint16_t old_gpr2val = *(uint16_t *)gpr2val;
+			uint16_t old_gpr2val = *(volatile uint16_t *)gpr2val;
 			if (old_gpr2val == srval)
-				*(uint16_t *)gpr2val = gpr1val;
+				*(volatile uint16_t *)gpr2val = gpr1val;
 			mutex_unlock (m);
 			gpr1val = old_gpr2val;
 			break; }
@@ -432,9 +432,9 @@ savedkctx * cldsthdlr (savedkctx *kctx, unsigned long opcode) {
 		case 0xfe: { // cldst32
 			mutex *m = &cldstmutexarray[(gpr2val/sizeof(unsigned long))%(sizeof(cldstmutexarray)/sizeof(mutex))];
 			mutex_lock (m);
-			uint32_t old_gpr2val = *(uint32_t *)gpr2val;
+			uint32_t old_gpr2val = *(volatile uint32_t *)gpr2val;
 			if (old_gpr2val == srval)
-				*(uint32_t *)gpr2val = gpr1val;
+				*(volatile uint32_t *)gpr2val = gpr1val;
 			mutex_unlock (m);
 			gpr1val = old_gpr2val;
 			break; }
@@ -443,9 +443,9 @@ savedkctx * cldsthdlr (savedkctx *kctx, unsigned long opcode) {
 		case 0xff: { // cldst64
 			mutex *m = &cldstmutexarray[(gpr2val/sizeof(unsigned long))%(sizeof(cldstmutexarray)/sizeof(mutex))];
 			mutex_lock (m);
-			uint64_t old_gpr2val = *(uint64_t *)gpr2val;
+			uint64_t old_gpr2val = *(volatile uint64_t *)gpr2val;
 			if (old_gpr2val == srval)
-				*(uint64_t *)gpr2val = gpr1val;
+				*(volatile uint64_t *)gpr2val = gpr1val;
 			mutex_unlock (m);
 			gpr1val = old_gpr2val;
 			break; }
