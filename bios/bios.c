@@ -580,8 +580,6 @@ unsigned long hwdrvblkdev_blkoffs[MAXCORECNT] = {
 	[0 ... MAXCORECNT - 1] = 0,
 };
 
-#include <hwdrvintctrl/hwdrvintctrl.h>
-
 savedkctx * syscallhdlr (savedkctx *kctx, unsigned long _) {
 
 	unsigned long sr; // %sr: syscall number.
@@ -696,13 +694,6 @@ savedkctx * syscallhdlr (savedkctx *kctx, unsigned long _) {
 				#if (MAXCORECNT > 1)
 				mutex_unlock (&m);
 				#endif
-			} else if (r1 == BIOS_FD_INTCTRLDEV) {
-				if (r3 == 0) {
-					r1 = 0;
-					goto done;
-				}
-				*(unsigned long *)r2 = (hwdrvintctrl_ack());
-				r1 = sizeof (unsigned long);
 			} else
 				goto error;
 
@@ -765,12 +756,6 @@ savedkctx * syscallhdlr (savedkctx *kctx, unsigned long _) {
 				#if (MAXCORECNT > 1)
 				mutex_unlock (&m);
 				#endif
-			} else if (r1 == BIOS_FD_INTCTRLDEV) {
-				if (r3 == 0) {
-					r1 = 0;
-					goto done;
-				}
-				r1 = (((hwdrvintctrl_int(*(unsigned long *)r2)) != -1) * sizeof (unsigned long));
 			} else
 				goto error;
 
