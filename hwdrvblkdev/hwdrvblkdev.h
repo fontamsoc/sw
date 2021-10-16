@@ -29,6 +29,9 @@ typedef struct {
 // Block size in bytes.
 #define BLKSZ 512
 
+// Function called before hwdrvblkdev_isrdy() returns busy (0).
+static void (*hwdrvblkdev_isbsy)(void) = (void *)0;
+
 // Read block device status.
 // Returns 1 if ready, 0 if busy, -1 if error/poweroff.
 static signed long hwdrvblkdev_isrdy (hwdrvblkdev *dev) {
@@ -39,7 +42,7 @@ static signed long hwdrvblkdev_isrdy (hwdrvblkdev *dev) {
 		: "r" (dev->addr+HWDRVBLKDEV_RESET));
 	if (n == HWDRVBLKDEV_POWEROFF || n == HWDRVBLKDEV_ERROR)
 		return -1;
-	return (n == HWDRVBLKDEV_READY);
+	return ((n == HWDRVBLKDEV_READY) ?: (hwdrvblkdev_isbsy ? (hwdrvblkdev_isbsy(), 0) : 0));
 }
 
 static void *hwdrvblkdev_read_ptr_saved = (void *)-1;
@@ -50,7 +53,6 @@ static unsigned long hwdrvblkdev_read_idx_saved = -1;
 // by this function.
 // As part of the initialization, the block given by the argument idx gets loaded.
 // On success returns 1 otherwise 0.
-// TODO: Remove the need to use hwdrvblkdev_isrdy() ...
 static unsigned long hwdrvblkdev_init (hwdrvblkdev *dev, unsigned long idx) {
 	void* addr = dev->addr;
 	// Reset the controller.
@@ -155,7 +157,6 @@ static void hwdrvblkdev_write (hwdrvblkdev *dev, void* ptr, unsigned long idx) {
 // to copy is given by the argument cnt. The fact that the destination
 // and source may overlap is taken into account.
 // Returns the count of blocks that could be copied.
-// TODO: Remove the need to use hwdrvblkdev_isrdy() ...
 static unsigned long hwdrvblkdev_cpy (hwdrvblkdev *dev, unsigned long dstidx, unsigned long srcidx, unsigned long cnt) {
 	if (!cnt)
 		return 0;
