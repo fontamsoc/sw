@@ -48,13 +48,13 @@ static void hwdrvdevtbl_find (hwdrvdevtbl *dev) {
 
 	hwdrvdevtbl ddev;
 
-	unsigned long intridx;
+	unsigned long intridx = 0;
 
 	ddev.e = d;
 	ddev.id = d->id;
 	ddev.addr = (void *)0;
 	ddev.mapsz = d->mapsz;
-	ddev.intridx = (d->useintr ? (intridx = d->useintr) : -1);
+	ddev.intridx = ((d->useintr ? (intridx += d->useintr) : 0) -1);
 
 	while (1) {
 		if (!d->mapsz) {
