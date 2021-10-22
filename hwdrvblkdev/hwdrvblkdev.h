@@ -42,11 +42,13 @@ static signed long hwdrvblkdev_isrdy (hwdrvblkdev *dev) {
 		: "r" (dev->addr+HWDRVBLKDEV_RESET));
 	if (n == HWDRVBLKDEV_POWEROFF || n == HWDRVBLKDEV_ERROR)
 		return -1;
-	return ((n == HWDRVBLKDEV_READY) ?: (hwdrvblkdev_isbsy ? (hwdrvblkdev_isbsy(), 0) : 0));
+	return ((n == HWDRVBLKDEV_READY) ? 1 : (hwdrvblkdev_isbsy ? (hwdrvblkdev_isbsy(), 0) : 0));
 }
 
-static void *hwdrvblkdev_read_ptr_saved = (void *)-1;
-static unsigned long hwdrvblkdev_read_idx_saved = -1;
+static void *hwdrvblkdev_read_ptr_saved;
+static unsigned long hwdrvblkdev_read_idx_saved;
+static void *hwdrvblkdev_write_ptr_saved;
+static unsigned long hwdrvblkdev_write_idx_saved;
 
 // Initialize the block device at the address given through
 // the argument dev->addr; the field dev->blkcnt get initialized
@@ -83,27 +85,23 @@ static unsigned long hwdrvblkdev_init (hwdrvblkdev *dev, unsigned long idx) {
 		:: "r" (addr+HWDRVBLKDEV_SWAP));
 	hwdrvblkdev_read_ptr_saved = (void *)-1;
 	hwdrvblkdev_read_idx_saved = -1;
+	hwdrvblkdev_write_ptr_saved = (void *)-1;
+	hwdrvblkdev_write_idx_saved = -1;
 	return 1;
 }
 
-// Copies cnt uints from memory area src to memory area dst.
-// The memory areas must not overlap.
-// Returns (dst+(cnt*sizeof(unsigned long))).
-void *uintcpy (void *dst, void *src, unsigned long cnt);
+void *memcpy (void *dest, const void *src, size_t count);
 
-// Copies cnt u8s from memory area src to memory area dst.
-// The memory areas must not overlap.
-// Returns (dst+cnt).
-void *u8cpy (void *dst, void *src, unsigned long cnt);
-
-// Read from the block device into the buffer given by the argument ptr.
-// The index of the block to read is given by the argument idx,
-// where a block is BLKSZ bytes. The block device must be ready.
-// Returns 1 if block was read, otherwise 0 indicating retry is needed.
-static unsigned long hwdrvblkdev_read (hwdrvblkdev *dev, void* ptr, unsigned long idx) {
+// Read a block from the block device into the buffer given by the argument ptr.
+// Argument nxt is used to initiate the next block read while retrieving block read.
+// The index of the block to read is given by the argument idx, where a block is BLKSZ bytes.
+// The block device must be ready. Returns 1 if block was read, otherwise 0 indicating retry is needed.
+static unsigned long hwdrvblkdev_read (hwdrvblkdev *dev, void* ptr, unsigned long idx, unsigned long nxt) {
+	void* addr = dev->addr;
 	if (ptr == hwdrvblkdev_read_ptr_saved && idx == hwdrvblkdev_read_idx_saved)
 		goto resume;
-	void* addr = dev->addr;
+	hwdrvblkdev_write_ptr_saved = (void *)-1;
+	hwdrvblkdev_write_idx_saved = -1;
 	// Initiate the block read.
 	__asm__ __volatile__ (
 		"ldst %0, %1"
@@ -117,26 +115,36 @@ static unsigned long hwdrvblkdev_read (hwdrvblkdev *dev, void* ptr, unsigned lon
 	__asm__ __volatile__ (
 		"ldst %%sr, %0"
 		:: "r" (addr+HWDRVBLKDEV_SWAP));
+	if (nxt) {
+		idx += 1;
+		// Initiate the next block read.
+		__asm__ __volatile__ (
+			"ldst %0, %1"
+			: "+r" ((unsigned long){idx})
+			: "r" (addr+HWDRVBLKDEV_READ));
+		hwdrvblkdev_read_ptr_saved = (ptr + BLKSZ);
+		hwdrvblkdev_read_idx_saved = idx;
+	} else {
+		hwdrvblkdev_read_ptr_saved = (void *)-1;
+		hwdrvblkdev_read_idx_saved = -1;
+	}
 	// Retrieve loaded data.
-	if (((unsigned long)ptr)%sizeof(unsigned long)) // addr assumed correctly aligned.
-		u8cpy (ptr, addr, BLKSZ);
-	else
-		uintcpy (ptr, addr, BLKSZ/sizeof(unsigned long));
-	hwdrvblkdev_read_ptr_saved = (void *)-1;
-	hwdrvblkdev_read_idx_saved = -1;
+	memcpy (ptr, addr, BLKSZ);
 	return 1;
 }
 
-// Write to the block device from the buffer given by the argument ptr.
-// The index of the block to write is given by the argument idx,
-// where a block is BLKSZ bytes. The block device must be ready.
-static void hwdrvblkdev_write (hwdrvblkdev *dev, void* ptr, unsigned long idx) {
+// Write a block to the block device from the buffer given by the argument ptr.
+// Argument nxt is used to fill controller up with next data while writing a block.
+// The index of the block to write is given by the argument idx, where a block is BLKSZ bytes.
+// The block device must be ready.
+static void hwdrvblkdev_write (hwdrvblkdev *dev, void* ptr, unsigned long idx, unsigned long nxt) {
 	void* addr = dev->addr;
-	// Copy the data to store.
-	if (((unsigned long)ptr)%sizeof(unsigned long)) // addr assumed correctly aligned.
-		u8cpy (addr, ptr, BLKSZ);
-	else
-		uintcpy (addr, ptr, BLKSZ/sizeof(unsigned long));
+	if (ptr == hwdrvblkdev_write_ptr_saved && idx == hwdrvblkdev_write_idx_saved)
+		goto resume;
+	hwdrvblkdev_read_ptr_saved = (void *)-1;
+	hwdrvblkdev_read_idx_saved = -1;
+	memcpy (addr, ptr, BLKSZ);
+	resume:
 	// Present the data to the controller.
 	__asm__ __volatile__ (
 		"ldst %%sr, %0"
@@ -146,8 +154,16 @@ static void hwdrvblkdev_write (hwdrvblkdev *dev, void* ptr, unsigned long idx) {
 		"ldst %0, %1"
 		: "+r" ((unsigned long){idx})
 		: "r" (addr+HWDRVBLKDEV_WRITE));
-	hwdrvblkdev_read_ptr_saved = (void *)-1;
-	hwdrvblkdev_read_idx_saved = -1;
+	if (nxt) {
+		ptr += BLKSZ;
+		// Fill controller up with next data to write.
+		memcpy (addr, ptr, BLKSZ);
+		hwdrvblkdev_write_ptr_saved = ptr;
+		hwdrvblkdev_write_idx_saved = (idx + 1);
+	} else {
+		hwdrvblkdev_write_ptr_saved = (void *)-1;
+		hwdrvblkdev_write_idx_saved = -1;
+	}
 }
 
 // Copy blocks within the block device without the need
@@ -160,6 +176,10 @@ static void hwdrvblkdev_write (hwdrvblkdev *dev, void* ptr, unsigned long idx) {
 static unsigned long hwdrvblkdev_cpy (hwdrvblkdev *dev, unsigned long dstidx, unsigned long srcidx, unsigned long cnt) {
 	if (!cnt)
 		return 0;
+	hwdrvblkdev_read_ptr_saved = (void *)-1;
+	hwdrvblkdev_read_idx_saved = -1;
+	hwdrvblkdev_write_ptr_saved = (void *)-1;
+	hwdrvblkdev_write_idx_saved = -1;
 	// Variable used to determine whether to copy blocks from
 	// the top or bottom to avoid overwriting data when the
 	// destination and source overlap.

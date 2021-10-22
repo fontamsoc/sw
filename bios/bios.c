@@ -88,7 +88,7 @@ extern void *parkpu_end;
 // Copies cnt uints from memory area src to memory area dst.
 // The memory areas must not overlap.
 // Returns (dst+(cnt*sizeof(unsigned long))).
-void *uintcpy (void *dst, void *src, unsigned long cnt); __asm__ (
+void *uintcpy (void *dst, const void *src, unsigned long cnt); __asm__ (
 	".text\n"
 	".global  uintcpy\n"
 	".type    uintcpy, @function\n"
@@ -110,7 +110,7 @@ void *uintcpy (void *dst, void *src, unsigned long cnt); __asm__ (
 // Copies cnt u8s from memory area src to memory area dst.
 // The memory areas must not overlap.
 // Returns (dst+cnt).
-void *u8cpy (void *dst, void *src, unsigned long cnt); __asm__ (
+void *u8cpy (void *dst, const void *src, unsigned long cnt); __asm__ (
 	".text\n"
 	".global  u8cpy\n"
 	".type    u8cpy, @function\n"
@@ -128,6 +128,16 @@ void *u8cpy (void *dst, void *src, unsigned long cnt); __asm__ (
 	"1: j %rp\n"
 
 	".size    u8cpy, (. - u8cpy)\n");
+
+typedef unsigned long size_t;
+
+void *memcpy (void *dest, const void *src, size_t count) {
+	if (((unsigned long)dest|(unsigned long)src)%sizeof(unsigned long))
+		u8cpy (dest, src, count);
+	else
+		uintcpy (dest, src, (count/sizeof(unsigned long)));
+	return dest;
+}
 
 // Structure describing the MBR.
 struct __attribute__((packed)) {
@@ -234,7 +244,7 @@ __attribute__((noreturn)) void main (void) {
 		}
 		if (isrdy == 0)
 			continue;
-		unsigned long n = hwdrvblkdev_read (&hwdrvblkdev_dev, (void *)k, i);
+		unsigned long n = hwdrvblkdev_read (&hwdrvblkdev_dev, (void *)k, i, ((i + 1) <= kernel_lba_end));
 		k += (n*BLKSZ);
 		i += n;
 	}
@@ -687,8 +697,7 @@ savedkctx * syscallhdlr (savedkctx *kctx, unsigned long _) {
 				}
 				hwdrvblkdev_blkoffs[coreid] +=
 					(r1 = hwdrvblkdev_read (
-						&hwdrvblkdev_dev,
-						(void *)r2, hwdrvblkdev_blkoffs[coreid]));
+						&hwdrvblkdev_dev, (void *)r2, hwdrvblkdev_blkoffs[coreid], (r3 > 1)));
 				// Note that return value is not byte amount
 				// but number of blocks read.
 				#if (MAXCORECNT > 1)
@@ -748,7 +757,7 @@ savedkctx * syscallhdlr (savedkctx *kctx, unsigned long _) {
 					r1 = 0;
 					goto done;
 				}
-				hwdrvblkdev_write (&hwdrvblkdev_dev, (void *)r2, hwdrvblkdev_blkoffs[coreid]);
+				hwdrvblkdev_write (&hwdrvblkdev_dev, (void *)r2, hwdrvblkdev_blkoffs[coreid], (r3 > 1));
 				hwdrvblkdev_blkoffs[coreid] += 1;
 				r1 = 1;
 				// Note that return value is not byte amount
