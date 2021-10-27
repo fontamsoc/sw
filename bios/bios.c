@@ -129,14 +129,32 @@ void *u8cpy (void *dst, const void *src, unsigned long cnt); __asm__ (
 
 	".size    u8cpy, (. - u8cpy)\n");
 
+#include <hwdrvdevtbl/hwdrvdevtbl.h>
+hwdrvdevtbl hwdrvdevtbl_dma = {.e = (devtblentry *)0, .id = 2 /* DMA engine */};
+//hwdrvdevtbl hwdrvdevtbl_ram = {.e = (devtblentry *)0, .id = 1 /* RAM device */};
+
+#include <hwdrvdma/hwdrvdma.h>
+hwdrvdma hwdrvdma_dev = {.addr = (void *)-1};
+
 typedef unsigned long size_t;
 
-void *memcpy (void *dest, const void *src, size_t count) {
-	if (((unsigned long)dest|(unsigned long)src)%sizeof(unsigned long))
-		u8cpy (dest, src, count);
+void *memcpy (void *dst, const void *src, size_t cnt) {
+	if (hwdrvdma_dev.addr != (void *)-1) {
+		#pragma GCC diagnostic push
+		#pragma GCC diagnostic ignored "-Wdiscarded-qualifiers"
+		hwdrvdma_xfer ( // dst and src regions will not be overlapping.
+			&hwdrvdma_dev,
+			dst, dst+cnt-1,
+			src, src+cnt-1,
+			cnt);
+		#pragma GCC diagnostic pop
+		while (hwdrvdma_xfer (&hwdrvdma_dev, 0, 0, 0, 0, -1));
+		__asm__ __volatile__ ("dcacherst" ::: "memory");
+	} else if (((unsigned long)dst|(unsigned long)src)%sizeof(unsigned long))
+		u8cpy (dst, src, cnt);
 	else
-		uintcpy (dest, src, (count/sizeof(unsigned long)));
-	return dest;
+		uintcpy (dst, src, (cnt/sizeof(unsigned long)));
+	return dst;
 }
 
 // Structure describing the MBR.
@@ -159,9 +177,6 @@ hwdrvblkdev hwdrvblkdev_dev = {.addr = (void *)BLKDEVADDR};
 hwdrvchar hwdrvchar_dev = {.addr = (void *)UARTADDR};
 
 #define BLKSZ 512 /* block size in bytes */
-
-//#include <hwdrvdevtbl/hwdrvdevtbl.h>
-//hwdrvdevtbl hwdrvdevtbl_dev = {.e = (devtblentry *)0, .id = 1 /* RAM device */};
 
 #include "version.h"
 
@@ -248,16 +263,22 @@ __attribute__((noreturn)) void main (void) {
 	unsigned long kernel_lba_end = kernel_lba_begin + kernel_sect_cnt -1;
 
 	// Look for RAM device.
-	/*while (hwdrvdevtbl_find (&hwdrvdevtbl_dev),
-		(hwdrvdevtbl_dev.mapsz && hwdrvdevtbl_dev.addr <= (void *)KERNELADDR)) {
-		if ((hwdrvdevtbl_dev.addr + (hwdrvdevtbl_dev.mapsz*sizeof(unsigned long))) >=
+	/*while (hwdrvdevtbl_find (&hwdrvdevtbl_ram),
+		(hwdrvdevtbl_ram.mapsz && hwdrvdevtbl_ram.addr <= (void *)KERNELADDR)) {
+		if ((hwdrvdevtbl_ram.addr + (hwdrvdevtbl_ram.mapsz*sizeof(unsigned long))) >=
 			((void *)KERNELADDR + (kernel_sect_cnt*BLKSZ)))
 			break;
 	}
-	if (!hwdrvdevtbl_dev.mapsz || hwdrvdevtbl_dev.addr > (void *)KERNELADDR) {
+	if (!hwdrvdevtbl_ram.mapsz || hwdrvdevtbl_ram.addr > (void *)KERNELADDR) {
 		printstr("no ram device large enough for kernel\n");
 		parkpu();
 	}*/
+
+	// Look for DMA engine.
+	if (hwdrvdevtbl_find (&hwdrvdevtbl_dma), hwdrvdevtbl_dma.mapsz) {
+		hwdrvdma_dev.addr = hwdrvdevtbl_dma.addr;
+		hwdrvdma_sel (&hwdrvdma_dev, 0);
+	}
 
 	// Adjust %ksl to enable caching throughout the memory region where the kernel is to be loaded.
 	asm volatile ("setksl %0\n" :: "r"(KERNELADDR+(((kernel_lba_end-kernel_lba_begin)+1)*BLKSZ)));
@@ -276,6 +297,9 @@ __attribute__((noreturn)) void main (void) {
 		k += (n*BLKSZ);
 		i += n;
 	}
+
+	// Disable use of DMA by BIOS to prevent conflict with the kernel.
+	hwdrvdma_dev.addr = (void *)-1;
 
 	printstr("kernel loaded\n");
 
