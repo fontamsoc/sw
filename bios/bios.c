@@ -172,6 +172,34 @@ int putchar (int c) {
 
 #include <print/print.h>
 
+//#define DO_KERNEL_HEXDUMP
+#ifdef DO_KERNEL_HEXDUMP
+// Compare cnt uints between memory areas src and dst.
+// When equal, it returns (dst+(cnt*sizeof(unsigned long))).
+void *uintcmp (void *dst, void *src, unsigned long cnt); __asm__ (
+	".text\n"
+	".global  uintcmp\n"
+	".type    uintcmp, @function\n"
+	".p2align 1\n"
+	"uintcmp:\n"
+
+	"rli %sr, 1f\n"
+	"jz %3, %sr\n"
+	"rli %sr, 0f\n"
+	"rli %6, 1f\n"
+	"0: ld %4, %2; ld %5, %1\n"
+	"seq %4, %5; jz %4, %6\n"
+	"inc8 %1, "__xstr__(__SIZEOF_POINTER__)"\n"
+	"inc8 %2, "__xstr__(__SIZEOF_POINTER__)"\n"
+	"inc8 %3, -1\n"
+	"jnz %3, %sr\n"
+	"1: j %rp\n"
+
+	".size    uintcmp, (. - uintcmp)\n");
+
+#include <hexdump/hexdump.h>
+#endif
+
 __attribute__((noreturn)) void main (void) {
 
 	hwdrvchar_init (&hwdrvchar_dev, UARTBAUD);
@@ -250,6 +278,10 @@ __attribute__((noreturn)) void main (void) {
 	}
 
 	printstr("kernel loaded\n");
+
+	#ifdef DO_KERNEL_HEXDUMP
+	hexdump ((void *)KERNELADDR, kernel_sect_cnt*BLKSZ);
+	#endif
 
 	// Setup the initial kernel stack as follow:
 	// - argc
