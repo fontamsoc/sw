@@ -226,7 +226,7 @@ __attribute__((noreturn)) void main (void) {
 			((void *)KERNELADDR + (kernel_sect_cnt*BLKSZ)))
 			break;
 	}
-	if (!hwdrvdevtbl_dev.mapsz) {
+	if (!hwdrvdevtbl_dev.mapsz || hwdrvdevtbl_dev.addr > (void *)KERNELADDR) {
 		printstr("no ram device large enough for kernel\n");
 		parkpu();
 	}*/
