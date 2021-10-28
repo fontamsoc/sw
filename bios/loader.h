@@ -6,4 +6,5 @@
 #define DEVTBLADDR      (0x200 /* By convention, the device table is located at 0x200 */)
 #define BIOSADDR        0x1000
 #define KERNELADDR      0x4000 /* must match corresponding constant in the kernel source-code */
+#define KSLVAL          (KERNELADDR*16)
 #define BIOSPART        1

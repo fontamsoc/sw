@@ -23,7 +23,7 @@ __asm__ (
 
 	// Adjust %ksl to enable caching throughout the memory
 	// region where the loader and BIOS will be running.
-	"li %sr, ("__xstr__(KERNELADDR)"+512)\n"
+	"li %sr, ("__xstr__(KSLVAL)")\n"
 	"setksl %sr\n"
 	// Initialize %sp and %fp.
 	"rli16 %sp, stack + "__xstr__(STACKSZ)"\n" // ### Manually encoding rli16 since linker-relaxation is not yet implemented.
@@ -148,9 +148,6 @@ __attribute__((noreturn)) void main (void) {
 		__asm__ __volatile__ (
 			"li8 %%sr, 3 /* RRESET */; ldst %%sr, %0"
 			:: "r" (DEVTBLADDR+sizeof(unsigned long)));
-		// Reset %ksl to enable caching throughout the memory
-		// region where the loader and BIOS will be running.
-		__asm__ __volatile__ ("li %sr, ("__xstr__(KERNELADDR)"+512); setksl %sr");
 		x = 1 /* RAMCACHESZ */;
 		__asm__ __volatile__ (
 			"ldst %0, %1"
