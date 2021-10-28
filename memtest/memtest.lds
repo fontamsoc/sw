@@ -2,7 +2,7 @@
    (c) William Fonkou Tambe
 
    Templated from `ld -verbose` with following changes done:
-   - First segment starts at 0x4000(KERNELADDR).
+   - First segment starts at 0x8000(KERNELADDR).
    - Use ALIGN(8) for data segment, instead of ALIGN(CONSTANT (MAXPAGESIZE)),
 	accounting for pu64.
    - Remove shared library support.
@@ -12,7 +12,7 @@
 ENTRY(_start)
 
 SECTIONS {
-	PROVIDE (__executable_start = SEGMENT_START("text-segment", 0x4000/*KERNELADDR*/));
+	PROVIDE (__executable_start = SEGMENT_START("text-segment", 0x8000/*KERNELADDR*/));
 	. = __executable_start;
 	.text           : {
 		*(.text._start)

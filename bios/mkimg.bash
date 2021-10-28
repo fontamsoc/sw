@@ -135,7 +135,7 @@ rootfs_blksz=$(((${rootfs_blksz}<3)?3:${rootfs_blksz}))
 }
 
 PARKPUSZ=24
-BIOSMAXSZ=$(((3*0x1000)-${PARKPUSZ}))
+BIOSMAXSZ=$(((7*0x1000)-${PARKPUSZ}))
 # Note that -${PARKPUSZ} takes into account parkpu expected by multipu at (KERNELADDR - PARKPUSZ).
 [ ${bios_sz} -gt ${BIOSMAXSZ} ] && {
 	echo error: bios-code size is greater than ${BIOSMAXSZ} bytes

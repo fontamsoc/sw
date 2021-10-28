@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // (c) William Fonkou Tambe
 
-#define STACKSZ		128 /* computed from -fstack-usage outputs and sizeof(savedkctx) */
+#define STACKSZ		256 /* computed from -fstack-usage outputs and sizeof(savedkctx) */
 #define UARTADDR	(0x0ff8 /* By convention, the first UART is located at 0x0ff8 */)
 #define UARTBAUD	115200
 #define BLKDEVADDR	(0x0 /* By convention, the first block device is located at 0x0 */)
 #define DEVTBLADDR	(0x200 /* By convention, the device table is located at 0x200 */)
 #define RAMDEVADDR	(0x1000 /* By convention, the first RAM device is located at 0x1000 */)
-#define KERNELADDR	0x4000 /* must match corresponding constant in the kernel source-code */
+#define KERNELADDR	0x8000 /* must match corresponding constant in the kernel source-code */
 #define KERNPART	2
 #define CLDSTMUTEXCNT	8 /* the greater this value, the least likely threads will contend */
 
