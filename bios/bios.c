@@ -242,12 +242,12 @@ __attribute__((noreturn)) void main (void) {
 	// Install parkpu() at the bottom of the bios region.
 	unsigned long parkpu_sz = ((unsigned long)&parkpu_end - (unsigned long)&parkpu);
 	if (parkpu_sz % sizeof(unsigned long)) { // parkpu() size must be appropriate for uintcpy().
-		//printstr("parkpu() has invalid size\n"); ###: Commented out to reduce BIOS size.
+		printstr("parkpu() has invalid size\n"); // ###: Can be commented out to reduce BIOS size.
 		parkpu();
 	}
 	unsigned long parkpu_addr = (KERNELADDR - PARKPUSZ);
 	if ((unsigned long)&_end > parkpu_addr) {
-		//printstr("parkpu() cannot be installed\n"); ###: Commented out to reduce BIOS size.
+		printstr("parkpu() cannot be installed\n"); // ###: Can be commented out to reduce BIOS size.
 		parkpu();
 	}
 	uintcpy ((void *)parkpu_addr, &parkpu, parkpu_sz/sizeof(unsigned long));
@@ -319,7 +319,6 @@ __attribute__((noreturn)) void main (void) {
 	p[1] = (unsigned long)"";
 	p[2] = (unsigned long)&kernelarg_start;
 	p[3] = 0;
-	extern void *___ishw;
 	p[4] = (unsigned long)&___ishw;
 	p[5] = 0;
 
