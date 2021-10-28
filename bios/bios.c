@@ -131,7 +131,7 @@ void *u8cpy (void *dst, const void *src, unsigned long cnt); __asm__ (
 
 #include <hwdrvdevtbl/hwdrvdevtbl.h>
 hwdrvdevtbl hwdrvdevtbl_dma = {.e = (devtblentry *)0, .id = 2 /* DMA engine */};
-//hwdrvdevtbl hwdrvdevtbl_ram = {.e = (devtblentry *)0, .id = 1 /* RAM device */};
+hwdrvdevtbl hwdrvdevtbl_ram = {.e = (devtblentry *)0, .id = 1 /* RAM device */};
 
 #include <hwdrvdma/hwdrvdma.h>
 hwdrvdma hwdrvdma_dev = {.addr = (void *)-1};
@@ -263,7 +263,7 @@ __attribute__((noreturn)) void main (void) {
 	unsigned long kernel_lba_end = kernel_lba_begin + kernel_sect_cnt -1;
 
 	// Look for RAM device.
-	/*while (hwdrvdevtbl_find (&hwdrvdevtbl_ram),
+	while (hwdrvdevtbl_find (&hwdrvdevtbl_ram),
 		(hwdrvdevtbl_ram.mapsz && hwdrvdevtbl_ram.addr <= (void *)KERNELADDR)) {
 		if ((hwdrvdevtbl_ram.addr + (hwdrvdevtbl_ram.mapsz*sizeof(unsigned long))) >=
 			((void *)KERNELADDR + (kernel_sect_cnt*BLKSZ)))
@@ -272,7 +272,7 @@ __attribute__((noreturn)) void main (void) {
 	if (!hwdrvdevtbl_ram.mapsz || hwdrvdevtbl_ram.addr > (void *)KERNELADDR) {
 		printstr("no ram device large enough for kernel\n");
 		parkpu();
-	}*/
+	}
 
 	// Look for DMA engine.
 	if (hwdrvdevtbl_find (&hwdrvdevtbl_dma), hwdrvdevtbl_dma.mapsz) {
