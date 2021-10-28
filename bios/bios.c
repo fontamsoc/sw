@@ -215,6 +215,13 @@ void *uintcmp (void *dst, void *src, unsigned long cnt); __asm__ (
 #include <hexdump/hexdump.h>
 #endif
 
+__asm__ (
+	".data\n"
+	".align "__xstr__(__SIZEOF_POINTER__)"\n"
+	".type ___biosend, @object\n"
+	"___biosend: .ascii \"BIOSend=________\"\n"
+	".size    ___biosend, (. - ___biosend)\n");
+
 __attribute__((noreturn)) void main (void) {
 
 	hwdrvchar_init (&hwdrvchar_dev, UARTBAUD);
@@ -238,6 +245,10 @@ __attribute__((noreturn)) void main (void) {
 	*(unsigned long *)((void *)&___ishw + 8/*sizeof("___ISHW=")*/) = (unsigned long)ksysopfaulthdlr;
 
 	extern void *__executable_start, *_end;
+
+	// Save BIOS _end address to be retrieved from kernel environment.
+	extern void *___biosend;
+	*(unsigned long *)((void *)&___biosend + 8/*sizeof("BIOSend=")*/) = (unsigned long)&_end;
 
 	// Install parkpu() at the bottom of the bios region.
 	unsigned long parkpu_sz = ((unsigned long)&parkpu_end - (unsigned long)&parkpu);
@@ -312,7 +323,7 @@ __attribute__((noreturn)) void main (void) {
 	// - null-terminated argv pointers array.
 	// - null-terminated envp pointers array.
 
-	volatile unsigned long p[6]; // Declared volatile so that GCC does not optimize it out.
+	volatile unsigned long p[7]; // Declared volatile so that GCC does not optimize it out.
 
 	p[0] = 2;
 	extern void *kernelarg_start;
@@ -320,7 +331,8 @@ __attribute__((noreturn)) void main (void) {
 	p[2] = (unsigned long)&kernelarg_start;
 	p[3] = 0;
 	p[4] = (unsigned long)&___ishw;
-	p[5] = 0;
+	p[5] = (unsigned long)&___biosend;
+	p[6] = 0;
 
 	__asm__ __volatile__ (
 		"cpy %%sp, %0\n"
