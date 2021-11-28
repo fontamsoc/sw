@@ -143,10 +143,14 @@ hwdrvdevtbl hwdrvdevtbl_ram = {.e = (devtblentry *)0, .id = 1 /* RAM device */};
 #include <hwdrvdma/hwdrvdma.h>
 hwdrvdma hwdrvdma_dev = {.addr = (void *)-1};
 
+#include <hwdrvintctrl/hwdrvintctrl.h>
+
 typedef unsigned long size_t;
 
+unsigned long use_dma = 0;
+
 void *memcpy (void *dst, const void *src, size_t cnt) {
-	if (hwdrvdma_dev.addr != (void *)-1) {
+	if (use_dma) {
 		#pragma GCC diagnostic push
 		#pragma GCC diagnostic ignored "-Wdiscarded-qualifiers"
 		hwdrvdma_xfer ( // dst and src regions will not be overlapping.
@@ -155,7 +159,9 @@ void *memcpy (void *dst, const void *src, size_t cnt) {
 			src, src+cnt-1,
 			cnt);
 		#pragma GCC diagnostic pop
-		while (hwdrvdma_xfer (&hwdrvdma_dev, 0, 0, 0, 0, -1));
+		do {
+			asm volatile ("halt; sysret\n" ::: "memory");
+		} while (hwdrvdma_xfer (&hwdrvdma_dev, 0, 0, 0, 0, -1));
 		__asm__ __volatile__ ("dcacherst" ::: "memory");
 	} else if (((unsigned long)dst|(unsigned long)src)%sizeof(unsigned long))
 		u8cpy (dst, src, cnt);
@@ -296,6 +302,13 @@ __attribute__((noreturn)) void main (void) {
 	if (hwdrvdevtbl_find (&hwdrvdevtbl_dma), hwdrvdevtbl_dma.mapsz) {
 		hwdrvdma_dev.addr = hwdrvdevtbl_dma.addr;
 		hwdrvdma_sel (&hwdrvdma_dev, 0);
+		hwdrvintctrl_ack(getcoreid(), 1);
+		hwdrvintctrl_ena (hwdrvdevtbl_dma.intridx, 1);
+		asm volatile (
+			"li16 %%sr, 0x2000\n"
+			"setflags %%sr\n"
+			::: "memory", "%sr");
+		use_dma = (hwdrvdma_dev.addr != (void *)-1 && hwdrvdevtbl_dma.intridx != -1);
 	}
 
 	// Adjust %ksl to enable caching throughout the memory region where the kernel is to be loaded.
@@ -317,7 +330,11 @@ __attribute__((noreturn)) void main (void) {
 	}
 
 	// Disable use of DMA by BIOS to prevent conflict with the kernel.
-	hwdrvdma_dev.addr = (void *)-1;
+	if (hwdrvdevtbl_dma.mapsz) {
+		use_dma = 0;
+		hwdrvintctrl_ena (hwdrvdevtbl_dma.intridx, 0);
+		hwdrvintctrl_ack(getcoreid(), 0);
+	}
 
 	printstr("kernel loaded\n");
 
