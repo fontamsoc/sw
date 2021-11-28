@@ -29,8 +29,8 @@ static inline void hwdrvdma_sel (hwdrvdma *dev, unsigned long idx) {
 
 // Incremental DMA transfer by cnt bytes from source range [src_start_addr, src_end_addr]
 // to destination range [dst_start_addr, dst_end_addr] wrapping around respective ranges.
-// The source and destination ranges can overlap only if they have the same size
-// and the destination region is at a lower address than the source region.
+// The source and destination ranges can overlap only if they have the same size,
+// with the destination region at an address lower than the source region.
 // Returns the number of bytes left to transfer, where *_addr arguments
 // are ignored when the argument cnt is 0 or -1.
 // When the argument cnt is 0, an ongoing transfer terminates.
