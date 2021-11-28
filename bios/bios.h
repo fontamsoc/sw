@@ -25,11 +25,10 @@
 #define SEEK_END 2
 
 // Must match linux/include/uapi/asm-generic/unistd.h .
-#define __NR_syscalls		447
-#define __NR_settls		(__NR_syscalls+0)
-#define __NR_gettls		(__NR_syscalls+1)
-#define __NR_PU32_syscalls_start (__NR_syscalls+2)
-#define __NR_lseek		(__NR_PU32_syscalls_start+0)
+#define __NR_arch_specific_syscall 244
+#define __NR_lseek  (__NR_arch_specific_syscall+0)
+#define __NR_settls (__NR_arch_specific_syscall+1)
+#define __NR_gettls (__NR_arch_specific_syscall+2)
 #define __NR_exit		93
 #define __NR_exit_group		94
 #define __NR_openat		56
