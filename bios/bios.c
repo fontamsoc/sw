@@ -7,6 +7,13 @@
 #define __xstr__(s) __str__(s)
 #define __str__(s) #s
 
+#define getcoreid() ({	\
+	unsigned long n;		\
+	asm volatile (			\
+		"getcoreid %0"		\
+		:  "=r"(n));		\
+	n; })
+
 static unsigned char stack[STACKSZ] __attribute__((used));
 
 // Substitute for crt0.S since this is built using -nostdlib.
@@ -684,28 +691,23 @@ savedkctx * syscallhdlr (savedkctx *kctx, unsigned long _) {
 					"setkgpr %2, %%3\n"
 					: "=r"(r1), "=r"(r2), "=r"(r3));
 
-			unsigned long coreid = 0;
-			#if (MAXCORECNT > 1)
-			asm volatile ("getcoreid %0" : "=r"(coreid));
-			#endif
-
-			if (coreid >= MAXCORECNT || r1 != BIOS_FD_STORAGEDEV)
+			if (getcoreid() >= MAXCORECNT || r1 != BIOS_FD_STORAGEDEV)
 				goto error;
 
 			if (r3 == SEEK_SET) {
 				if (r2 < hwdrvblkdev_dev.blkcnt)
-					r1 = (hwdrvblkdev_blkoffs[coreid] = r2);
+					r1 = (hwdrvblkdev_blkoffs[getcoreid()] = r2);
 				else
 					goto error;
 			} else if (r3 == SEEK_CUR) {
-				if ((hwdrvblkdev_blkoffs[coreid]+r2) < hwdrvblkdev_dev.blkcnt)
-					r1 = (hwdrvblkdev_blkoffs[coreid] += r2);
+				if ((hwdrvblkdev_blkoffs[getcoreid()]+r2) < hwdrvblkdev_dev.blkcnt)
+					r1 = (hwdrvblkdev_blkoffs[getcoreid()] += r2);
 				else
 					goto error;
 			} else if (r3 == SEEK_END) {
 				r2 = (hwdrvblkdev_dev.blkcnt+r2);
 				if (r2 <= hwdrvblkdev_dev.blkcnt)
-					r1 = (hwdrvblkdev_blkoffs[coreid] = r2);
+					r1 = (hwdrvblkdev_blkoffs[getcoreid()] = r2);
 				else
 					goto error;
 			} else
@@ -743,13 +745,11 @@ savedkctx * syscallhdlr (savedkctx *kctx, unsigned long _) {
 					r1 = 0;
 					goto done;
 				}
-				unsigned long coreid = 0;
 				#if (MAXCORECNT > 1)
-				asm volatile ("getcoreid %0" : "=r"(coreid));
 				static mutex m = {0, 0, 0};
 				mutex_lock (&m); // Done for multicore support.
 				#endif
-				if (hwdrvblkdev_blkoffs[coreid] >= hwdrvblkdev_dev.blkcnt)
+				if (hwdrvblkdev_blkoffs[getcoreid()] >= hwdrvblkdev_dev.blkcnt)
 					goto error;
 				signed long isrdy = hwdrvblkdev_isrdy (&hwdrvblkdev_dev);
 				if (isrdy < 0 &&
@@ -762,9 +762,9 @@ savedkctx * syscallhdlr (savedkctx *kctx, unsigned long _) {
 					r1 = 0;
 					goto done;
 				}
-				hwdrvblkdev_blkoffs[coreid] +=
+				hwdrvblkdev_blkoffs[getcoreid()] +=
 					(r1 = hwdrvblkdev_read (
-						&hwdrvblkdev_dev, (void *)r2, hwdrvblkdev_blkoffs[coreid], (r3 > 1)));
+						&hwdrvblkdev_dev, (void *)r2, hwdrvblkdev_blkoffs[getcoreid()], (r3 > 1)));
 				// Note that return value is not byte amount
 				// but number of blocks read.
 				#if (MAXCORECNT > 1)
@@ -805,13 +805,11 @@ savedkctx * syscallhdlr (savedkctx *kctx, unsigned long _) {
 					r1 = 0;
 					goto done;
 				}
-				unsigned long coreid = 0;
 				#if (MAXCORECNT > 1)
-				asm volatile ("getcoreid %0" : "=r"(coreid));
 				static mutex m = {0, 0, 0};
 				mutex_lock (&m); // Done for multicore support.
 				#endif
-				if (hwdrvblkdev_blkoffs[coreid] >= hwdrvblkdev_dev.blkcnt)
+				if (hwdrvblkdev_blkoffs[getcoreid()] >= hwdrvblkdev_dev.blkcnt)
 					goto error;
 				signed long isrdy = hwdrvblkdev_isrdy (&hwdrvblkdev_dev);
 				if (isrdy < 0 &&
@@ -824,8 +822,8 @@ savedkctx * syscallhdlr (savedkctx *kctx, unsigned long _) {
 					r1 = 0;
 					goto done;
 				}
-				hwdrvblkdev_write (&hwdrvblkdev_dev, (void *)r2, hwdrvblkdev_blkoffs[coreid], (r3 > 1));
-				hwdrvblkdev_blkoffs[coreid] += 1;
+				hwdrvblkdev_write (&hwdrvblkdev_dev, (void *)r2, hwdrvblkdev_blkoffs[getcoreid()], (r3 > 1));
+				hwdrvblkdev_blkoffs[getcoreid()] += 1;
 				r1 = 1;
 				// Note that return value is not byte amount
 				// but number of blocks written.
