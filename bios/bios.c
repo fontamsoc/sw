@@ -102,15 +102,14 @@ void *uintcpy (void *dst, const void *src, unsigned long cnt); __asm__ (
 	".p2align 1\n"
 	"uintcpy:\n"
 
-	"rli %sr, 1f\n"
-	"jz %3, %sr\n"
+	"jz %3, %rp\n"
 	"rli %sr, 0f\n"
 	"0: ld %4, %2; st %4, %1\n"
 	"inc8 %1, "__xstr__(__SIZEOF_POINTER__)"\n"
 	"inc8 %2, "__xstr__(__SIZEOF_POINTER__)"\n"
 	"inc8 %3, -1\n"
 	"jnz %3, %sr\n"
-	"1: j %rp\n"
+	"j %rp\n"
 
 	".size    uintcpy, (. - uintcpy)\n");
 
@@ -124,15 +123,14 @@ void *u8cpy (void *dst, const void *src, unsigned long cnt); __asm__ (
 	".p2align 1\n"
 	"u8cpy:\n"
 
-	"rli %sr, 1f\n"
-	"jz %3, %sr\n"
+	"jz %3, %rp\n"
 	"rli %sr, 0f\n"
 	"0: ld8 %4, %2; st8 %4, %1\n"
 	"inc8 %1, 1\n"
 	"inc8 %2, 1\n"
 	"inc8 %3, -1\n"
 	"jnz %3, %sr\n"
-	"1: j %rp\n"
+	"j %rp\n"
 
 	".size    u8cpy, (. - u8cpy)\n");
 
@@ -211,8 +209,7 @@ void *uintcmp (void *dst, void *src, unsigned long cnt); __asm__ (
 	".p2align 1\n"
 	"uintcmp:\n"
 
-	"rli %sr, 1f\n"
-	"jz %3, %sr\n"
+	"jz %3, %rp\n"
 	"rli %sr, 0f\n"
 	"rli %6, 1f\n"
 	"0: ld %4, %2; ld %5, %1\n"
@@ -221,7 +218,7 @@ void *uintcmp (void *dst, void *src, unsigned long cnt); __asm__ (
 	"inc8 %2, "__xstr__(__SIZEOF_POINTER__)"\n"
 	"inc8 %3, -1\n"
 	"jnz %3, %sr\n"
-	"1: j %rp\n"
+	"j %rp\n"
 
 	".size    uintcmp, (. - uintcmp)\n");
 
