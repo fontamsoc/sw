@@ -43,7 +43,6 @@ __asm__ (
 	//#define DEBUG_KERNELMODE
 
 	#ifdef DEBUG_KERNELMODE
-	#define UARTADDR (0x1000-__SIZEOF_POINTER__)
 	#define HWDRVCHAR_CMDGETBUFFERUSAGE 0
 	"80: li %2, "__xstr__(UARTADDR)"\n"
 	"li %1, "__xstr__((HWDRVCHAR_CMDGETBUFFERUSAGE<<30) | 1)"\n"
