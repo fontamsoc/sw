@@ -284,7 +284,7 @@ __attribute__((noreturn)) void main (void) {
 	unsigned long kernel_lba_end = kernel_lba_begin + kernel_sect_cnt -1;
 
 	// Look for RAM device.
-	while (hwdrvdevtbl_find (&hwdrvdevtbl_ram),
+	while (hwdrvdevtbl_find (&hwdrvdevtbl_ram, 0),
 		(hwdrvdevtbl_ram.mapsz && hwdrvdevtbl_ram.addr <= (void *)KERNELADDR)) {
 		if ((hwdrvdevtbl_ram.addr + (hwdrvdevtbl_ram.mapsz*sizeof(unsigned long))) >=
 			((void *)KERNELADDR + (kernel_sect_cnt*BLKSZ)))
@@ -296,7 +296,7 @@ __attribute__((noreturn)) void main (void) {
 	}
 
 	// Look for DMA engine.
-	if (hwdrvdevtbl_find (&hwdrvdevtbl_dma), hwdrvdevtbl_dma.mapsz) {
+	if (hwdrvdevtbl_find (&hwdrvdevtbl_dma, 0), (hwdrvdevtbl_dma.mapsz && hwdrvdevtbl_dma.intridx >= 0)) {
 		hwdrvdma_dev.addr = hwdrvdevtbl_dma.addr;
 		hwdrvdma_sel (&hwdrvdma_dev, 0);
 		hwdrvintctrl_ack(getcoreid(), 1);
@@ -305,7 +305,7 @@ __attribute__((noreturn)) void main (void) {
 			"li16 %%sr, 0x2000\n"
 			"setflags %%sr\n"
 			::: "memory", "%sr");
-		use_dma = (hwdrvdma_dev.addr != (void *)-1 && hwdrvdevtbl_dma.intridx != -1);
+		use_dma = 1;
 	}
 
 	// Adjust %ksl to enable caching throughout the memory region where the kernel is to be loaded.
@@ -327,7 +327,7 @@ __attribute__((noreturn)) void main (void) {
 	}
 
 	// Disable use of DMA by BIOS to prevent conflict with the kernel.
-	if (hwdrvdevtbl_dma.mapsz) {
+	if (use_dma) {
 		use_dma = 0;
 		hwdrvintctrl_ena (hwdrvdevtbl_dma.intridx, 0);
 		hwdrvintctrl_ack(getcoreid(), 0);

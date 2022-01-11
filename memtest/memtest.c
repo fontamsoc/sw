@@ -170,7 +170,7 @@ unsigned long progressmodulo;
 void main (void) {
 	hwdrvchar_init (&hwdrvchar_dev, UARTBAUD);
 	hwdrvdevtbl hwdrvdevtbl_dev = {.e = (devtblentry *)0, .id = 1 /* RAM device */};
-	hwdrvdevtbl_find (&hwdrvdevtbl_dev);
+	hwdrvdevtbl_find (&hwdrvdevtbl_dev, 0);
 	if (!hwdrvdevtbl_dev.mapsz) {
 		printstr ("! memory not found\n");
 		return; }
