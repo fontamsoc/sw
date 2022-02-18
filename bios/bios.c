@@ -192,7 +192,7 @@ hwdrvchar hwdrvchar_dev = {.addr = (void *)UARTADDR};
 #include "version.h"
 
 int putchar (int c) {
-	while (!hwdrvchar_write_(&hwdrvchar_dev, &c, 1));
+	while (!hwdrvchar_write(&hwdrvchar_dev, &c, 1));
 	return c;
 }
 
@@ -241,7 +241,7 @@ __attribute__((noreturn)) void main (void) {
 		"ldst %0, %1"
 		: "+r" (socversion)
 		: "r"  (DEVTBLADDR));
-	printstr("\nsoc  "); printhex(socversion); printstr("\n");
+	printstr("\r\nsoc  "); printhex(socversion); printstr("\r\n");
 
 	printstr(BIOSVERSION);
 
@@ -263,18 +263,18 @@ __attribute__((noreturn)) void main (void) {
 	// Install parkpu() at the bottom of the bios region.
 	unsigned long parkpu_sz = ((unsigned long)&parkpu_end - (unsigned long)&parkpu);
 	if (parkpu_sz % sizeof(unsigned long)) { // parkpu() size must be appropriate for uintcpy().
-		printstr("parkpu() has invalid size\n"); // ###: Can be commented out to reduce BIOS size.
+		printstr("parkpu() has invalid size\r\n"); // ###: Can be commented out to reduce BIOS size.
 		parkpu();
 	}
 	unsigned long parkpu_addr = (KERNELADDR - PARKPUSZ);
 	if ((unsigned long)&_end > parkpu_addr) {
-		printstr("parkpu() cannot be installed\n"); // ###: Can be commented out to reduce BIOS size.
+		printstr("parkpu() cannot be installed\r\n"); // ###: Can be commented out to reduce BIOS size.
 		parkpu();
 	}
 	uintcpy ((void *)parkpu_addr, &parkpu, parkpu_sz/sizeof(unsigned long));
 
 	if (!hwdrvblkdev_init (&hwdrvblkdev_dev, 0)) {
-		printstr("blkdev initialization failed\n");
+		printstr("blkdev initialization failed\r\n");
 		parkpu();
 	}
 
@@ -291,7 +291,7 @@ __attribute__((noreturn)) void main (void) {
 			break;
 	}
 	if (!hwdrvdevtbl_ram.mapsz || hwdrvdevtbl_ram.addr > (void *)KERNELADDR) {
-		printstr("no ram device large enough for kernel\n");
+		printstr("no ram device large enough for kernel\r\n");
 		parkpu();
 	}
 
@@ -316,7 +316,7 @@ __attribute__((noreturn)) void main (void) {
 	for (unsigned long i = kernel_lba_begin; i <= kernel_lba_end;) {
 		signed long isrdy = hwdrvblkdev_isrdy (&hwdrvblkdev_dev);
 		if (isrdy < 0) {
-			printstr("blkdev read error\n");
+			printstr("blkdev read error\r\n");
 			parkpu();
 		}
 		if (isrdy == 0)
@@ -333,7 +333,7 @@ __attribute__((noreturn)) void main (void) {
 		hwdrvintctrl_ack(getcoreid(), 0);
 	}
 
-	printstr("kernel loaded\n");
+	printstr("kernel loaded\r\n");
 
 	#ifdef DO_KERNEL_HEXDUMP
 	hexdump ((void *)KERNELADDR, kernel_sect_cnt*BLKSZ);
@@ -465,7 +465,7 @@ typedef union {
 } savedkctx;
 
 savedkctx * badopcode (savedkctx *kctx, unsigned long opcode) {
-	printstr("badopcode: "); printu8hex(opcode); putchar(' '); printu8hex(opcode>>8); putchar('\n');
+	printstr("badopcode: "); printu8hex(opcode); putchar(' '); printu8hex(opcode>>8); printstr("\r\n");
 	parkpu();
 	return kctx;
 }
@@ -768,8 +768,8 @@ savedkctx * syscallhdlr (savedkctx *kctx, unsigned long _) {
 				signed long isrdy = hwdrvblkdev_isrdy (&hwdrvblkdev_dev);
 				if (isrdy < 0 &&
 					!hwdrvblkdev_init (&hwdrvblkdev_dev, 0)) {
-					//printstr("blkdev initialization failed\n");
-					//printstr("blkdev read error\n");
+					//printstr("blkdev initialization failed\r\n");
+					//printstr("blkdev read error\r\n");
 					goto error;
 				}
 				if (isrdy == 0) {
@@ -810,7 +810,7 @@ savedkctx * syscallhdlr (savedkctx *kctx, unsigned long _) {
 				static mutex m = {0, 0, 0};
 				mutex_lock (&m); // Done for multicore support.
 				#endif
-				r1 = hwdrvchar_write_ (&hwdrvchar_dev, (unsigned char *)r2, r3);
+				r1 = hwdrvchar_write (&hwdrvchar_dev, (unsigned char *)r2, r3);
 				#if (MAXCORECNT > 1)
 				mutex_unlock (&m);
 				#endif
@@ -828,8 +828,8 @@ savedkctx * syscallhdlr (savedkctx *kctx, unsigned long _) {
 				signed long isrdy = hwdrvblkdev_isrdy (&hwdrvblkdev_dev);
 				if (isrdy < 0 &&
 					!hwdrvblkdev_init (&hwdrvblkdev_dev, 0)) {
-					//printstr("blkdev initialization failed\n");
-					//printstr("blkdev write error\n");
+					//printstr("blkdev initialization failed\r\n");
+					//printstr("blkdev write error\r\n");
 					goto error;
 				}
 				if (isrdy == 0) {

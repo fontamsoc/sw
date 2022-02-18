@@ -38,7 +38,7 @@ ${LOADER_BIN}: loader.h loader.lds loader.c
 
 ${BIOS_BIN}: bios.h bios.lds bios.c \
              ../hwdrvchar/hwdrvchar.h ../mutex/mutex.h
-	echo \#define BIOSVERSION \"bios $$(var=$$(git log -n1 --pretty=format:'%H'); echo $${var:0:8})\\n\" > version.h
+	echo \#define BIOSVERSION \"bios $$(var=$$(git log -n1 --pretty=format:'%H'); echo $${var:0:8})\\r\\n\" > version.h
 	${CC} -nostdlib -I ../ ${CFLAGS} -o ${BIOS_ELF} \
 		-include bios.h bios.c \
 		-lgcc -Wl,-Tbios.lds
