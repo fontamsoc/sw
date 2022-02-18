@@ -145,27 +145,6 @@ static unsigned long hwdrvchar_write (hwdrvchar *dev, void *ptr, unsigned long s
 	return cnt;
 }
 
-// Same as hwdrvchar_write(), but also write '\r' for each '\n'.
-static unsigned long hwdrvchar_write_ (hwdrvchar *dev, void *ptr, unsigned long sz) {
-	void* addr = dev->addr;
-	unsigned long cnt = 0;
-	unsigned char prevc = 0;
-	while (sz) {
-		unsigned char c = *(unsigned char *)ptr;
-		if (c == '\n' && prevc != '\r') {
-			if (hwdrvchar_writable(dev) < 2)
-				return cnt;
-			*((volatile unsigned char *)addr) = '\r';
-		}
-		if (!hwdrvchar_writable(dev))
-			return cnt;
-		*((volatile unsigned char *)addr) = c;
-		prevc = c;
-		++ptr; --sz; ++cnt;
-	}
-	return cnt;
-}
-
 // Configure the UART device interrupt.
 // When the argument threshold is null, interrupt gets disabled.
 // When the argument threshold is non-null, interrupt gets enabled,
