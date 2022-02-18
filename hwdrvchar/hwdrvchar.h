@@ -89,10 +89,19 @@ static unsigned long hwdrvchar_read (hwdrvchar *dev, void *ptr, unsigned long sz
 	void* addr = dev->addr;
 	unsigned long cnt = 0;
 	while (sz) {
-		if (!hwdrvchar_readable(dev))
+		unsigned long n = hwdrvchar_readable(dev);
+		if (!n)
 			return cnt;
-		*(unsigned char *)ptr = *((volatile unsigned char *)addr);
-		++ptr; --sz; ++cnt;
+		if (sz >= n)
+			sz -= n;
+		else {
+			n = sz;
+			sz = 0;
+		}
+		cnt += n;
+		do {
+			*(unsigned char *)(ptr++) = *((volatile unsigned char *)addr);
+		} while (--n);
 	}
 	return cnt;
 }
@@ -119,10 +128,19 @@ static unsigned long hwdrvchar_write (hwdrvchar *dev, void *ptr, unsigned long s
 	void* addr = dev->addr;
 	unsigned long cnt = 0;
 	while (sz) {
-		if (!hwdrvchar_writable(dev))
+		unsigned long n = hwdrvchar_writable(dev);
+		if (!n)
 			return cnt;
-		*((volatile unsigned char *)addr) = *(unsigned char *)ptr;
-		++ptr; --sz; ++cnt;
+		if (sz >= n)
+			sz -= n;
+		else {
+			n = sz;
+			sz = 0;
+		}
+		cnt += n;
+		do {
+			*((volatile unsigned char *)addr) = *(unsigned char *)(ptr++);
+		} while (--n);
 	}
 	return cnt;
 }
