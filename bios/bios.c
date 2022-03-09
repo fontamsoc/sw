@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 // (c) William Fonkou Tambe
 
-#include <stdint.h>
-
 // Used to stringify.
 #define __xstr__(s) __str__(s)
 #define __str__(s) #s
@@ -168,6 +166,8 @@ void *memcpy (void *dst, const void *src, size_t cnt) {
 	return dst;
 }
 
+#include <stdint.h>
+
 // Structure describing the MBR.
 struct __attribute__((packed)) {
 	unsigned char bootcode[446];
@@ -187,16 +187,27 @@ hwdrvblkdev hwdrvblkdev_dev = {.addr = (void *)BLKDEVADDR};
 #include <hwdrvchar/hwdrvchar.h>
 hwdrvchar hwdrvchar_dev = {.addr = (void *)UARTADDR};
 
-#define BLKSZ 512 /* block size in bytes */
-
-#include "version.h"
-
 int putchar (int c) {
 	while (!hwdrvchar_write(&hwdrvchar_dev, &c, 1));
 	return c;
 }
 
-#include <print/print.h>
+#include <stdio.h>
+
+#define puts_hex(I) ({ \
+	inline unsigned char gethex (unsigned char c) { \
+		c = (c+((c>=10)?('a'-10):'0')); \
+		return c; \
+	} \
+	unsigned i; \
+	for (i = 0; i < (2*sizeof(I)); ++i) \
+		putchar(gethex((I>>(((8*sizeof(I))-4)-(i*4)))&0xf)); \
+	i; \
+})
+
+#define BLKSZ 512 /* block size in bytes */
+
+#include "version.h"
 
 //#define DO_KERNEL_HEXDUMP
 #ifdef DO_KERNEL_HEXDUMP
@@ -241,9 +252,9 @@ __attribute__((noreturn)) void main (void) {
 		"ldst %0, %1"
 		: "+r" (socversion)
 		: "r"  (DEVTBLADDR));
-	printstr("\r\nsoc  "); printhex(socversion); printstr("\r\n");
+	puts("\r\nsoc  "); puts_hex(socversion); puts("\r\n");
 
-	printstr(BIOSVERSION);
+	puts(BIOSVERSION);
 
 	// Initialize %ksysopfaulthdlr.
 	__asm__ __volatile__ (
@@ -263,18 +274,18 @@ __attribute__((noreturn)) void main (void) {
 	// Install parkpu() at the bottom of the bios region.
 	unsigned long parkpu_sz = ((unsigned long)&parkpu_end - (unsigned long)&parkpu);
 	if (parkpu_sz % sizeof(unsigned long)) { // parkpu() size must be appropriate for uintcpy().
-		printstr("parkpu() has invalid size\r\n"); // ###: Can be commented out to reduce BIOS size.
+		puts("parkpu() has invalid size\r\n"); // ###: Can be commented out to reduce BIOS size.
 		parkpu();
 	}
 	unsigned long parkpu_addr = (KERNELADDR - PARKPUSZ);
 	if ((unsigned long)&_end > parkpu_addr) {
-		printstr("parkpu() cannot be installed\r\n"); // ###: Can be commented out to reduce BIOS size.
+		puts("parkpu() cannot be installed\r\n"); // ###: Can be commented out to reduce BIOS size.
 		parkpu();
 	}
 	uintcpy ((void *)parkpu_addr, &parkpu, parkpu_sz/sizeof(unsigned long));
 
 	if (!hwdrvblkdev_init (&hwdrvblkdev_dev, 0)) {
-		printstr("blkdev initialization failed\r\n");
+		puts("blkdev initialization failed\r\n");
 		parkpu();
 	}
 
@@ -291,7 +302,7 @@ __attribute__((noreturn)) void main (void) {
 			break;
 	}
 	if (!hwdrvdevtbl_ram.mapsz || hwdrvdevtbl_ram.addr > (void *)KERNELADDR) {
-		printstr("no ram device large enough for kernel\r\n");
+		puts("no ram device large enough for kernel\r\n");
 		parkpu();
 	}
 
@@ -316,7 +327,7 @@ __attribute__((noreturn)) void main (void) {
 	for (unsigned long i = kernel_lba_begin; i <= kernel_lba_end;) {
 		signed long isrdy = hwdrvblkdev_isrdy (&hwdrvblkdev_dev);
 		if (isrdy < 0) {
-			printstr("blkdev read error\r\n");
+			puts("blkdev read error\r\n");
 			parkpu();
 		}
 		if (isrdy == 0)
@@ -333,7 +344,7 @@ __attribute__((noreturn)) void main (void) {
 		hwdrvintctrl_ack(getcoreid(), 0);
 	}
 
-	printstr("kernel loaded\r\n");
+	puts("kernel loaded\r\n");
 
 	#ifdef DO_KERNEL_HEXDUMP
 	hexdump ((void *)KERNELADDR, kernel_sect_cnt*BLKSZ);
@@ -465,7 +476,7 @@ typedef union {
 } savedkctx;
 
 savedkctx * badopcode (savedkctx *kctx, unsigned long opcode) {
-	printstr("badopcode: "); printu8hex(opcode); putchar(' '); printu8hex(opcode>>8); printstr("\r\n");
+	puts("badopcode: "); puts_hex(opcode); putchar(' '); puts_hex(opcode>>8); puts("\r\n");
 	parkpu();
 	return kctx;
 }
@@ -768,8 +779,8 @@ savedkctx * syscallhdlr (savedkctx *kctx, unsigned long _) {
 				signed long isrdy = hwdrvblkdev_isrdy (&hwdrvblkdev_dev);
 				if (isrdy < 0 &&
 					!hwdrvblkdev_init (&hwdrvblkdev_dev, 0)) {
-					//printstr("blkdev initialization failed\r\n");
-					//printstr("blkdev read error\r\n");
+					//puts("blkdev initialization failed\r\n");
+					//puts("blkdev read error\r\n");
 					goto error;
 				}
 				if (isrdy == 0) {
@@ -828,8 +839,8 @@ savedkctx * syscallhdlr (savedkctx *kctx, unsigned long _) {
 				signed long isrdy = hwdrvblkdev_isrdy (&hwdrvblkdev_dev);
 				if (isrdy < 0 &&
 					!hwdrvblkdev_init (&hwdrvblkdev_dev, 0)) {
-					//printstr("blkdev initialization failed\r\n");
-					//printstr("blkdev write error\r\n");
+					//puts("blkdev initialization failed\r\n");
+					//puts("blkdev write error\r\n");
 					goto error;
 				}
 				if (isrdy == 0) {
