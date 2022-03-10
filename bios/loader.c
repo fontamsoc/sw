@@ -26,10 +26,10 @@ __asm__ (
 	"li %sr, ("__xstr__(KSLVAL)")\n"
 	"setksl %sr\n"
 	// Initialize %sp and %fp.
-	"rli16 %sp, stack + "__xstr__(STACKSZ)"\n" // ### Manually encoding rli16 since linker-relaxation is not yet implemented.
+	"rli16 %sp, stack + "__xstr__(STACKSZ)"\n"
 	//"li8 %fp, 0\n" // ### Disabled, as it is unnecessary.
 	// Call main().
-	"rli16 %sr, main\n" // ### Manually encoding rli16 since linker-relaxation is not yet implemented.
+	"rli16 %sr, main\n"
 	"jl %rp, %sr\n"
 	// We should never return from above jl,
 	// otherwise we must infinite loop.
