@@ -4,37 +4,10 @@
 #ifndef HEXDUMP_H
 #define HEXDUMP_H
 
-//int putchar (int);
-//void *uintcmp (void *dst, void *src, unsigned long cnt);
-
 // Function which write out byte at a time,
 // an hexdump of the memory region given by
 // the arguments mem and len.
 static void hexdump (void *mem, unsigned long len) {
-
-	unsigned char hex (unsigned char c) {
-		c = (c+((c>=10)?('a'-10):'0'));
-		return c;
-	}
-
-	void printhex (unsigned long n) {
-		for (unsigned i = 0; i < (2*sizeof(n)); ++i)
-			putchar(hex((n>>(((8*sizeof(n))-4)-(i*4)))&0xf));
-	}
-
-	void printu8hex (unsigned char n) {
-		for (unsigned i = 0; i < (2*sizeof(n)); ++i)
-			putchar(hex((n>>(((8*sizeof(n))-4)-(i*4)))&0xf));
-	}
-
-	// Take a string as argument, and pass each byte to putchar().
-	void printstr (unsigned char *str) {
-		unsigned char c;
-		while (c = *str) {
-			putchar(c);
-			++str;
-		}
-	}
 
 	enum {
 		// Number of bytes to display per line.
@@ -46,7 +19,7 @@ static void hexdump (void *mem, unsigned long len) {
 
 		if (!(i % COLUMNCOUNT)) {
 			// Print offset.
-			printhex(i); printstr("  ");
+			puts_hex(i); puts("  ");
 		}
 
 		unsigned long j = i;
@@ -57,9 +30,9 @@ static void hexdump (void *mem, unsigned long len) {
 			if (j < len) {
 				if ((j != i) && !(j%(COLUMNCOUNT/2)))
 					putchar(' ');
-				printu8hex(((unsigned char*)mem)[j]); putchar(' ');
+				puts_hex(((unsigned char*)mem)[j]); putchar(' ');
 			} else
-				printstr("   ");
+				puts("   ");
 		} while (++j < k);
 
 		// Writeout ASCII dump.
@@ -67,7 +40,7 @@ static void hexdump (void *mem, unsigned long len) {
 		// Buffer to be used for comparison in order to catch duplicate lines.
 		unsigned char buf[COLUMNCOUNT];
 
-		printstr(" |");
+		puts(" |");
 
 		j = i;
 
@@ -79,7 +52,7 @@ static void hexdump (void *mem, unsigned long len) {
 			buf[j % COLUMNCOUNT] = c;
 		} while (++j < k && j < len);
 
-		printstr("|\n");
+		puts("|\n");
 
 		j = 1;
 
@@ -90,7 +63,7 @@ static void hexdump (void *mem, unsigned long len) {
 				(uintcmp((void*)&buf, mem+i, COLUMNCOUNT) ==
 					((void*)&buf+(COLUMNCOUNT*sizeof(unsigned long))))) {
 				if (j) {
-					printstr("*\n");
+					puts("*\n");
 					j = 0;
 				}
 				goto checkifdone;
