@@ -67,7 +67,6 @@ __asm__ (
 
 	"getfaultaddr %1\n"
 
-	// Other values beside %3 which will be used to compute settlb arguments.
 	"li %2, 0xfff\n"
 	"li %4, 3\n"
 	"not %5, %2\n"
@@ -157,8 +156,6 @@ unsigned long mem32test (void *startaddr, void *endaddr);
 unsigned long mem64test (void *startaddr, void *endaddr);
 #endif
 
-unsigned long memretentiontest (void *startaddr, void *endaddr);
-
 #include <stdint.h>
 
 typedef union {
@@ -186,6 +183,9 @@ unsigned long progressmodulo;
 
 #include <hwdrvdevtbl/hwdrvdevtbl.h>
 
+unsigned long PATTERN1 = (unsigned long)0xaaaaaaaaaaaaaaaa;
+unsigned long PATTERN2 = (unsigned long)0xc9c9c9c9c9c9c9c9;
+
 void main (void) {
 	hwdrvchar_init (&hwdrvchar_dev, UARTBAUD);
 	hwdrvdevtbl hwdrvdevtbl_dev = {.e = (devtblentry *)0, .id = 1 /* RAM device */};
@@ -196,48 +196,35 @@ void main (void) {
 	void *memstartaddr = hwdrvdevtbl_dev.addr;
 	void *memendaddr = memstartaddr + (hwdrvdevtbl_dev.mapsz * sizeof(unsigned long));
 	progressmodulo = ((memendaddr - memstartaddr) / 0xff);
-	clkcyclecnt startclkcyclecnt = getclkcyclecnt();
-	unsigned long testidx = 0;
-	puts("testing 8bits memory accesses\n");
+	test_begin:; clkcyclecnt startclkcyclecnt = getclkcyclecnt();
+	puts("8bits test\n");
 	if (!mem8test (memstartaddr, memendaddr))
 		return;
 	#if __SIZEOF_POINTER__ >= 2
-	++testidx;
-	puts("testing 16bits memory accesses\n");
+	puts("16bits test\n");
 	if (!mem16test (memstartaddr, memendaddr))
 		return;
 	#endif
 	#if __SIZEOF_POINTER__ >= 4
-	++testidx;
-	puts("testing 32bits memory accesses\n");
+	puts("32bits test\n");
 	if (!mem32test (memstartaddr, memendaddr))
 		return;
 	#endif
 	#if __SIZEOF_POINTER__ >= 8
-	++testidx;
-	puts("testing 64bits memory accesses\n");
+	puts("64bits test\n");
 	if (!mem64test (memstartaddr, memendaddr))
 		return;
 	#endif
-	++testidx;
-	puts("testing memory retention\n");
-	if (!memretentiontest (memstartaddr, memendaddr))
-		return;
 	clkcyclecnt endclkcyclecnt = getclkcyclecnt();
 	endclkcyclecnt.val -= startclkcyclecnt.val;
-	if (testidx == ((__SIZEOF_POINTER__ >= 2) + (__SIZEOF_POINTER__ >= 4) + (__SIZEOF_POINTER__ >= 8) + 1)) {
-		puts("+ took 0x");
-		puts_hex(endclkcyclecnt.hi);
-		putchar ('_');
-		puts_hex(endclkcyclecnt.lo);
-		puts(" clkcycles (NbrOfTests == 0x");
-		puts_hex(testidx+1);
-		puts(")\n");
-		return;
-	}
-	// Catch a failure where the cpu jumps to the test
-	// end after encountering an invalid instruction.
-	puts("! unexpected ending");
+	puts("done ");
+	puts_hex(endclkcyclecnt.hi);
+	putchar (':');
+	puts_hex(endclkcyclecnt.lo);
+	putchar ('\n');
+	PATTERN1 -= 1;
+	PATTERN2 += 1;
+	goto test_begin;
 }
 
 extern void *__executable_start, *_end;
@@ -246,9 +233,6 @@ extern void *__executable_start, *_end;
 	(((VALUE<<(COUNT&((8*sizeof(VALUE))-1)))|(VALUE>>((8*sizeof(VALUE))-(COUNT&((8*sizeof(VALUE))-1)))))&((typeof(VALUE))-1))
 
 #define RESETLINE "\r\033[K"
-
-#define PATTERN1 0xaaaaaaaaaaaaaaaa
-#define PATTERN2 0xc9c9c9c9c9c9c9c9
 
 unsigned long mem8test (void *startaddr, void *endaddr) {
 
@@ -271,7 +255,7 @@ unsigned long mem8test (void *startaddr, void *endaddr) {
 		}
 	}
 
-	puts(RESETLINE"done writing pattern\n");
+	puts(RESETLINE"wrote pattern\n");
 
 	// Invert pattern written above.
 	for (volatile uint8_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
@@ -302,7 +286,7 @@ unsigned long mem8test (void *startaddr, void *endaddr) {
 		}
 	}
 
-	puts(RESETLINE"done writing inverted pattern\n");
+	puts(RESETLINE"wrote inverted pattern\n");
 
 	// Retrieve inverted pattern written above.
 	data = (uint8_t)PATTERN1;
@@ -323,7 +307,51 @@ unsigned long mem8test (void *startaddr, void *endaddr) {
 		}
 	}
 
-	puts(RESETLINE"done retrieving inverted pattern\n");
+	puts(RESETLINE"verified pattern\n");
+
+	data = (uint8_t)PATTERN2;
+
+	for (volatile uint8_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
+		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
+			ptr = (typeof(ptr))&_end;
+		data += 1;
+		*ptr = data;
+		uint8_t ptrval = *ptr;
+		if (ptrval != data) {
+			puts(RESETLINE"ptr    == 0x"); puts_hex((unsigned)ptr);
+			puts("\nptrval == 0x"); puts_hex(ptrval);
+			puts("\nexpect == 0x"); puts_hex(data); putchar('\n');
+			return 0;
+		}
+		unsigned long remaining = (unsigned long)endaddr - (unsigned long)ptr;
+		if (!(remaining%progressmodulo)) {
+			puts(RESETLINE); puts_hex(remaining/progressmodulo);
+		}
+	}
+
+	puts(RESETLINE"wrote retention pattern\n");
+
+	data = (uint8_t)PATTERN2;
+
+	// Retrieve pattern written above.
+	for (volatile uint8_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
+		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
+			ptr = (typeof(ptr))&_end;
+		data += 1;
+		uint8_t ptrval = *ptr;
+		if (ptrval != data) {
+			puts(RESETLINE"ptr    == 0x"); puts_hex((unsigned)ptr);
+			puts("\nptrval == 0x"); puts_hex(ptrval);
+			puts("\nexpect == 0x"); puts_hex(data); putchar('\n');
+			return 0;
+		}
+		unsigned long remaining = (unsigned long)endaddr - (unsigned long)ptr;
+		if (!(remaining%progressmodulo)) {
+			puts(RESETLINE); puts_hex(remaining/progressmodulo);
+		}
+	}
+
+	puts(RESETLINE"verified pattern\n");
 
 	return 1;
 }
@@ -350,7 +378,7 @@ unsigned long mem16test (void *startaddr, void *endaddr) {
 		}
 	}
 
-	puts(RESETLINE"done writing pattern\n");
+	puts(RESETLINE"wrote pattern\n");
 
 	// Invert pattern written above.
 	for (volatile uint16_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
@@ -381,7 +409,7 @@ unsigned long mem16test (void *startaddr, void *endaddr) {
 		}
 	}
 
-	puts(RESETLINE"done writing inverted pattern\n");
+	puts(RESETLINE"wrote inverted pattern\n");
 
 	// Retrieve inverted pattern written above.
 	data = (uint16_t)PATTERN1;
@@ -402,7 +430,51 @@ unsigned long mem16test (void *startaddr, void *endaddr) {
 		}
 	}
 
-	puts(RESETLINE"done retrieving inverted pattern\n");
+	puts(RESETLINE"verified pattern\n");
+
+	data = (uint16_t)PATTERN2;
+
+	for (volatile uint16_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
+		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
+			ptr = (typeof(ptr))&_end;
+		data += 1;
+		*ptr = data;
+		uint16_t ptrval = *ptr;
+		if (ptrval != data) {
+			puts(RESETLINE"ptr    == 0x"); puts_hex((unsigned)ptr);
+			puts("\nptrval == 0x"); puts_hex(ptrval);
+			puts("\nexpect == 0x"); puts_hex(data); putchar('\n');
+			return 0;
+		}
+		unsigned long remaining = (unsigned long)endaddr - (unsigned long)ptr;
+		if (!(remaining%progressmodulo)) {
+			puts(RESETLINE); puts_hex(remaining/progressmodulo);
+		}
+	}
+
+	puts(RESETLINE"wrote retention pattern\n");
+
+	data = (uint16_t)PATTERN2;
+
+	// Retrieve pattern written above.
+	for (volatile uint16_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
+		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
+			ptr = (typeof(ptr))&_end;
+		data += 1;
+		uint16_t ptrval = *ptr;
+		if (ptrval != data) {
+			puts(RESETLINE"ptr    == 0x"); puts_hex((unsigned)ptr);
+			puts("\nptrval == 0x"); puts_hex(ptrval);
+			puts("\nexpect == 0x"); puts_hex(data); putchar('\n');
+			return 0;
+		}
+		unsigned long remaining = (unsigned long)endaddr - (unsigned long)ptr;
+		if (!(remaining%progressmodulo)) {
+			puts(RESETLINE); puts_hex(remaining/progressmodulo);
+		}
+	}
+
+	puts(RESETLINE"verified pattern\n");
 
 	return 1;
 }
@@ -430,7 +502,7 @@ unsigned long mem32test (void *startaddr, void *endaddr) {
 		}
 	}
 
-	puts(RESETLINE"done writing pattern\n");
+	puts(RESETLINE"wrote pattern\n");
 
 	// Invert pattern written above.
 	for (volatile uint32_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
@@ -461,7 +533,7 @@ unsigned long mem32test (void *startaddr, void *endaddr) {
 		}
 	}
 
-	puts(RESETLINE"done writing inverted pattern\n");
+	puts(RESETLINE"wrote inverted pattern\n");
 
 	// Retrieve inverted pattern written above.
 	data = (uint32_t)PATTERN1;
@@ -482,7 +554,51 @@ unsigned long mem32test (void *startaddr, void *endaddr) {
 		}
 	}
 
-	puts(RESETLINE"done retrieving inverted pattern\n");
+	puts(RESETLINE"verified pattern\n");
+
+	data = (uint32_t)PATTERN2;
+
+	for (volatile uint32_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
+		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
+			ptr = (typeof(ptr))&_end;
+		data += 1;
+		*ptr = data;
+		uint32_t ptrval = *ptr;
+		if (ptrval != data) {
+			puts(RESETLINE"ptr    == 0x"); puts_hex((unsigned)ptr);
+			puts("\nptrval == 0x"); puts_hex(ptrval);
+			puts("\nexpect == 0x"); puts_hex(data); putchar('\n');
+			return 0;
+		}
+		unsigned long remaining = (unsigned long)endaddr - (unsigned long)ptr;
+		if (!(remaining%progressmodulo)) {
+			puts(RESETLINE); puts_hex(remaining/progressmodulo);
+		}
+	}
+
+	puts(RESETLINE"wrote retention pattern\n");
+
+	data = (uint32_t)PATTERN2;
+
+	// Retrieve pattern written above.
+	for (volatile uint32_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
+		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
+			ptr = (typeof(ptr))&_end;
+		data += 1;
+		uint32_t ptrval = *ptr;
+		if (ptrval != data) {
+			puts(RESETLINE"ptr    == 0x"); puts_hex((unsigned)ptr);
+			puts("\nptrval == 0x"); puts_hex(ptrval);
+			puts("\nexpect == 0x"); puts_hex(data); putchar('\n');
+			return 0;
+		}
+		unsigned long remaining = (unsigned long)endaddr - (unsigned long)ptr;
+		if (!(remaining%progressmodulo)) {
+			puts(RESETLINE); puts_hex(remaining/progressmodulo);
+		}
+	}
+
+	puts(RESETLINE"verified pattern\n");
 
 	return 1;
 }
@@ -510,7 +626,7 @@ unsigned long mem64test (void *startaddr, void *endaddr) {
 		}
 	}
 
-	puts(RESETLINE"done writing pattern\n");
+	puts(RESETLINE"wrote pattern\n");
 
 	// Invert pattern written above.
 	for (volatile uint64_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
@@ -541,7 +657,7 @@ unsigned long mem64test (void *startaddr, void *endaddr) {
 		}
 	}
 
-	puts(RESETLINE"done writing inverted pattern\n");
+	puts(RESETLINE"wrote inverted pattern\n");
 
 	// Retrieve inverted pattern written above.
 	data = (uint64_t)PATTERN1;
@@ -562,22 +678,16 @@ unsigned long mem64test (void *startaddr, void *endaddr) {
 		}
 	}
 
-	puts(RESETLINE"done retrieving inverted pattern\n");
+	puts(RESETLINE"verified pattern\n");
 
-	return 1;
-}
-#endif
+	data = (uint64_t)PATTERN2;
 
-unsigned long memretentiontest (void *startaddr, void *endaddr) {
-
-	unsigned long data = (unsigned long)PATTERN2;
-
-	for (volatile unsigned long *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
+	for (volatile uint64_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
 		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
 			ptr = (typeof(ptr))&_end;
 		data += 1;
 		*ptr = data;
-		unsigned long ptrval = *ptr;
+		uint64_t ptrval = *ptr;
 		if (ptrval != data) {
 			puts(RESETLINE"ptr    == 0x"); puts_hex((unsigned)ptr);
 			puts("\nptrval == 0x"); puts_hex(ptrval);
@@ -590,16 +700,16 @@ unsigned long memretentiontest (void *startaddr, void *endaddr) {
 		}
 	}
 
-	puts(RESETLINE"done writing pattern\n");
+	puts(RESETLINE"wrote retention pattern\n");
 
-	data = (unsigned long)PATTERN2;
+	data = (uint64_t)PATTERN2;
 
 	// Retrieve pattern written above.
-	for (volatile unsigned long *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
+	for (volatile uint64_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
 		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
 			ptr = (typeof(ptr))&_end;
 		data += 1;
-		unsigned long ptrval = *ptr;
+		uint64_t ptrval = *ptr;
 		if (ptrval != data) {
 			puts(RESETLINE"ptr    == 0x"); puts_hex((unsigned)ptr);
 			puts("\nptrval == 0x"); puts_hex(ptrval);
@@ -612,7 +722,8 @@ unsigned long memretentiontest (void *startaddr, void *endaddr) {
 		}
 	}
 
-	puts(RESETLINE"done retrieving pattern\n");
+	puts(RESETLINE"verified pattern\n");
 
 	return 1;
 }
+#endif
