@@ -229,8 +229,7 @@ void main (void) {
 
 extern void *__executable_start, *_end;
 
-#define BITROL(VALUE, COUNT) \
-	(((VALUE<<(COUNT&((8*sizeof(VALUE))-1)))|(VALUE>>((8*sizeof(VALUE))-(COUNT&((8*sizeof(VALUE))-1)))))&((typeof(VALUE))-1))
+#include <bitmanip.h>
 
 #define RESETLINE "\r\033[K"
 
@@ -240,7 +239,7 @@ unsigned long mem8test (void *startaddr, void *endaddr) {
 	for (volatile uint8_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
 		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
 			ptr = (typeof(ptr))&_end;
-		data = (BITROL (data, 1) + *(uint8_t *)&ptr);
+		data = (BITROL(data, (8*sizeof(data)), 1) + *(uint8_t *)&ptr);
 		*ptr = data;
 		uint8_t ptrval = *ptr;
 		if (ptrval != data) {
@@ -293,7 +292,7 @@ unsigned long mem8test (void *startaddr, void *endaddr) {
 	for (volatile uint8_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
 		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
 			ptr = (typeof(ptr))&_end;
-		data = (BITROL (data, 1) + *(uint8_t *)&ptr);
+		data = (BITROL(data, (8*sizeof(data)), 1) + *(uint8_t *)&ptr);
 		uint8_t ptrval = *ptr;
 		if (ptrval != (uint8_t)~data) {
 			puts(RESETLINE"ptr    == 0x"); puts_hex((unsigned)ptr);
@@ -363,7 +362,7 @@ unsigned long mem16test (void *startaddr, void *endaddr) {
 	for (volatile uint16_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
 		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
 			ptr = (typeof(ptr))&_end;
-		data = (BITROL (data, 1) + *(uint16_t *)&ptr);
+		data = (BITROL(data, (8*sizeof(data)), 1) + *(uint16_t *)&ptr);
 		*ptr = data;
 		uint16_t ptrval = *ptr;
 		if (ptrval != data) {
@@ -416,7 +415,7 @@ unsigned long mem16test (void *startaddr, void *endaddr) {
 	for (volatile uint16_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
 		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
 			ptr = (typeof(ptr))&_end;
-		data = (BITROL (data, 1) + *(uint16_t *)&ptr);
+		data = (BITROL(data, (8*sizeof(data)), 1) + *(uint16_t *)&ptr);
 		uint16_t ptrval = *ptr;
 		if (ptrval != (uint16_t)~data) {
 			puts(RESETLINE"ptr    == 0x"); puts_hex((unsigned)ptr);
@@ -487,7 +486,7 @@ unsigned long mem32test (void *startaddr, void *endaddr) {
 	for (volatile uint32_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
 		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
 			ptr = (typeof(ptr))&_end;
-		data = (BITROL (data, 1) + *(uint32_t *)&ptr);
+		data = (BITROL(data, (8*sizeof(data)), 1) + *(uint32_t *)&ptr);
 		*ptr = data;
 		uint32_t ptrval = *ptr;
 		if (ptrval != data) {
@@ -540,7 +539,7 @@ unsigned long mem32test (void *startaddr, void *endaddr) {
 	for (volatile uint32_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
 		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
 			ptr = (typeof(ptr))&_end;
-		data = (BITROL (data, 1) + *(uint32_t *)&ptr);
+		data = (BITROL(data, (8*sizeof(data)), 1) + *(uint32_t *)&ptr);
 		uint32_t ptrval = *ptr;
 		if (ptrval != (uint32_t)~data) {
 			puts(RESETLINE"ptr    == 0x"); puts_hex((unsigned)ptr);
@@ -611,7 +610,7 @@ unsigned long mem64test (void *startaddr, void *endaddr) {
 	for (volatile uint64_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
 		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
 			ptr = (typeof(ptr))&_end;
-		data = (BITROL (data, 1) + *(uint64_t *)&ptr);
+		data = (BITROL(data, (8*sizeof(data)), 1) + *(uint64_t *)&ptr);
 		*ptr = data;
 		uint64_t ptrval = *ptr;
 		if (ptrval != data) {
@@ -664,7 +663,7 @@ unsigned long mem64test (void *startaddr, void *endaddr) {
 	for (volatile uint64_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
 		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
 			ptr = (typeof(ptr))&_end;
-		data = (BITROL (data, 1) + *(uint64_t *)&ptr);
+		data = (BITROL(data, (8*sizeof(data)), 1) + *(uint64_t *)&ptr);
 		uint64_t ptrval = *ptr;
 		if (ptrval != (uint64_t)~data) {
 			puts(RESETLINE"ptr    == 0x"); puts_hex((unsigned)ptr);
