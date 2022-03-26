@@ -186,17 +186,30 @@ unsigned long progressmodulo;
 unsigned long PATTERN1 = (unsigned long)0xaaaaaaaaaaaaaaaa;
 unsigned long PATTERN2 = (unsigned long)0xc9c9c9c9c9c9c9c9;
 
+unsigned long ptrbitsz;
+unsigned long ptrbitoff;
+unsigned long ptrbitpos;
+unsigned long ptrbitpos_plus_ptrbitoff;
+
 void main (void) {
 	hwdrvchar_init (&hwdrvchar_dev, UARTBAUD);
 	hwdrvdevtbl hwdrvdevtbl_dev = {.e = (devtblentry *)0, .id = 1 /* RAM device */};
 	hwdrvdevtbl_find (&hwdrvdevtbl_dev, 0);
-	if (!hwdrvdevtbl_dev.mapsz) {
-		puts("! memory not found\n");
-		return; }
+	if (!hwdrvdevtbl_dev.mapsz)
+		{puts("! memory not found\n"); return;};
 	void *memstartaddr = hwdrvdevtbl_dev.addr;
-	void *memendaddr = memstartaddr + (hwdrvdevtbl_dev.mapsz * sizeof(unsigned long));
+	unsigned long memsz = (hwdrvdevtbl_dev.mapsz * sizeof(unsigned long));
+	ptrbitsz = -1;
+	for (unsigned long n = memsz; n; n >>= 1)
+		++ptrbitsz;
+	memsz = (1<<ptrbitsz); // Insure memsz is a power of two.
+	puts_hex(memsz); putchar ('\n');
+	void *memendaddr = (memstartaddr + memsz);
+	ptrbitoff = (ptrbitsz / 2);
+	ptrbitpos = 0;
 	progressmodulo = ((memendaddr - memstartaddr) / 0xff);
-	test_begin:; clkcyclecnt startclkcyclecnt = getclkcyclecnt();
+	test_begin:; ptrbitpos_plus_ptrbitoff = ((ptrbitpos + ptrbitoff) % ptrbitsz);
+	clkcyclecnt startclkcyclecnt = getclkcyclecnt();
 	puts("8bits test\n");
 	if (!mem8test (memstartaddr, memendaddr))
 		return;
@@ -218,12 +231,13 @@ void main (void) {
 	clkcyclecnt endclkcyclecnt = getclkcyclecnt();
 	endclkcyclecnt.val -= startclkcyclecnt.val;
 	puts("done ");
-	puts_hex(endclkcyclecnt.hi);
-	putchar (':');
-	puts_hex(endclkcyclecnt.lo);
-	putchar ('\n');
+	puts_hex(ptrbitpos); putchar (':');
+	puts_hex(endclkcyclecnt.hi); putchar (':');
+	puts_hex(endclkcyclecnt.lo); putchar ('\n');
 	PATTERN1 -= 1;
 	PATTERN2 += 1;
+	if (++ptrbitpos >= ptrbitsz)
+		ptrbitpos = 0;
 	goto test_begin;
 }
 
@@ -236,9 +250,16 @@ extern void *__executable_start, *_end;
 unsigned long mem8test (void *startaddr, void *endaddr) {
 
 	uint8_t data = (uint8_t)PATTERN1;
-	for (volatile uint8_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
+	for (volatile uint8_t *ptr_ = startaddr; ptr_ < (typeof(ptr_))endaddr; (ptr_ = (typeof(ptr_))((void *)ptr_ + 1))) {
+		unsigned long remaining = ((unsigned long)endaddr - (unsigned long)ptr_);
+		if (!(remaining%progressmodulo)) {
+			puts(RESETLINE); puts_hex(remaining/progressmodulo);
+		}
+		volatile uint8_t *ptr = ((void *)BITROR(
+			((unsigned long)ptr_ - (unsigned long)startaddr),
+			ptrbitsz, ptrbitpos_plus_ptrbitoff) + (unsigned long)startaddr);
 		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
-			ptr = (typeof(ptr))&_end;
+			continue;
 		data = (BITROL(data, (8*sizeof(data)), 1) + *(uint8_t *)&ptr);
 		*ptr = data;
 		uint8_t ptrval = *ptr;
@@ -248,18 +269,21 @@ unsigned long mem8test (void *startaddr, void *endaddr) {
 			puts("\nexpect == 0x"); puts_hex(data); putchar('\n');
 			return 0;
 		}
-		unsigned long remaining = (unsigned long)endaddr - (unsigned long)ptr;
-		if (!(remaining%progressmodulo)) {
-			puts(RESETLINE); puts_hex(remaining/progressmodulo);
-		}
 	}
 
 	puts(RESETLINE"wrote pattern\n");
 
 	// Invert pattern written above.
-	for (volatile uint8_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
+	for (volatile uint8_t *ptr_ = startaddr; ptr_ < (typeof(ptr_))endaddr; (ptr_ = (typeof(ptr_))((void *)ptr_ + 1))) {
+		unsigned long remaining = ((unsigned long)endaddr - (unsigned long)ptr_);
+		if (!(remaining%progressmodulo)) {
+			puts(RESETLINE); puts_hex(remaining/progressmodulo);
+		}
+		volatile uint8_t *ptr = ((void *)BITROR(
+			((unsigned long)ptr_ - (unsigned long)startaddr),
+			ptrbitsz, ptrbitpos_plus_ptrbitoff) + (unsigned long)startaddr);
 		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
-			ptr = (typeof(ptr))&_end;
+			continue;
 		// This test the instruction ldst.
 		data = (uint8_t)PATTERN2;
 		__asm__ __volatile__ ("ldst8 %0, %1" : "+r"(data) : "r" (ptr));
@@ -279,19 +303,22 @@ unsigned long mem8test (void *startaddr, void *endaddr) {
 			puts("\nexpect == 0x"); puts_hex(data);
 			return 0;
 		}
-		unsigned long remaining = (unsigned long)endaddr - (unsigned long)ptr;
-		if (!(remaining%progressmodulo)) {
-			puts(RESETLINE); puts_hex(remaining/progressmodulo);
-		}
 	}
 
 	puts(RESETLINE"wrote inverted pattern\n");
 
 	// Retrieve inverted pattern written above.
 	data = (uint8_t)PATTERN1;
-	for (volatile uint8_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
+	for (volatile uint8_t *ptr_ = startaddr; ptr_ < (typeof(ptr_))endaddr; (ptr_ = (typeof(ptr_))((void *)ptr_ + 1))) {
+		unsigned long remaining = ((unsigned long)endaddr - (unsigned long)ptr_);
+		if (!(remaining%progressmodulo)) {
+			puts(RESETLINE); puts_hex(remaining/progressmodulo);
+		}
+		volatile uint8_t *ptr = ((void *)BITROR(
+			((unsigned long)ptr_ - (unsigned long)startaddr),
+			ptrbitsz, ptrbitpos_plus_ptrbitoff) + (unsigned long)startaddr);
 		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
-			ptr = (typeof(ptr))&_end;
+			continue;
 		data = (BITROL(data, (8*sizeof(data)), 1) + *(uint8_t *)&ptr);
 		uint8_t ptrval = *ptr;
 		if (ptrval != (uint8_t)~data) {
@@ -300,19 +327,22 @@ unsigned long mem8test (void *startaddr, void *endaddr) {
 			puts("\nexpect == 0x"); puts_hex((uint8_t)~data); putchar('\n');
 			return 0;
 		}
-		unsigned long remaining = (unsigned long)endaddr - (unsigned long)ptr;
-		if (!(remaining%progressmodulo)) {
-			puts(RESETLINE); puts_hex(remaining/progressmodulo);
-		}
 	}
 
 	puts(RESETLINE"verified pattern\n");
 
 	data = (uint8_t)PATTERN2;
 
-	for (volatile uint8_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
+	for (volatile uint8_t *ptr_ = startaddr; ptr_ < (typeof(ptr_))endaddr; (ptr_ = (typeof(ptr_))((void *)ptr_ + 1))) {
+		unsigned long remaining = ((unsigned long)endaddr - (unsigned long)ptr_);
+		if (!(remaining%progressmodulo)) {
+			puts(RESETLINE); puts_hex(remaining/progressmodulo);
+		}
+		volatile uint8_t *ptr = ((void *)BITROR(
+			((unsigned long)ptr_ - (unsigned long)startaddr),
+			ptrbitsz, ptrbitpos_plus_ptrbitoff) + (unsigned long)startaddr);
 		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
-			ptr = (typeof(ptr))&_end;
+			continue;
 		data += 1;
 		*ptr = data;
 		uint8_t ptrval = *ptr;
@@ -322,10 +352,6 @@ unsigned long mem8test (void *startaddr, void *endaddr) {
 			puts("\nexpect == 0x"); puts_hex(data); putchar('\n');
 			return 0;
 		}
-		unsigned long remaining = (unsigned long)endaddr - (unsigned long)ptr;
-		if (!(remaining%progressmodulo)) {
-			puts(RESETLINE); puts_hex(remaining/progressmodulo);
-		}
 	}
 
 	puts(RESETLINE"wrote retention pattern\n");
@@ -333,9 +359,16 @@ unsigned long mem8test (void *startaddr, void *endaddr) {
 	data = (uint8_t)PATTERN2;
 
 	// Retrieve pattern written above.
-	for (volatile uint8_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
+	for (volatile uint8_t *ptr_ = startaddr; ptr_ < (typeof(ptr_))endaddr; (ptr_ = (typeof(ptr_))((void *)ptr_ + 1))) {
+		unsigned long remaining = ((unsigned long)endaddr - (unsigned long)ptr_);
+		if (!(remaining%progressmodulo)) {
+			puts(RESETLINE); puts_hex(remaining/progressmodulo);
+		}
+		volatile uint8_t *ptr = ((void *)BITROR(
+			((unsigned long)ptr_ - (unsigned long)startaddr),
+			ptrbitsz, ptrbitpos_plus_ptrbitoff) + (unsigned long)startaddr);
 		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
-			ptr = (typeof(ptr))&_end;
+			continue;
 		data += 1;
 		uint8_t ptrval = *ptr;
 		if (ptrval != data) {
@@ -343,10 +376,6 @@ unsigned long mem8test (void *startaddr, void *endaddr) {
 			puts("\nptrval == 0x"); puts_hex(ptrval);
 			puts("\nexpect == 0x"); puts_hex(data); putchar('\n');
 			return 0;
-		}
-		unsigned long remaining = (unsigned long)endaddr - (unsigned long)ptr;
-		if (!(remaining%progressmodulo)) {
-			puts(RESETLINE); puts_hex(remaining/progressmodulo);
 		}
 	}
 
@@ -359,9 +388,17 @@ unsigned long mem8test (void *startaddr, void *endaddr) {
 unsigned long mem16test (void *startaddr, void *endaddr) {
 
 	uint16_t data = (uint16_t)PATTERN1;
-	for (volatile uint16_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
-		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
-			ptr = (typeof(ptr))&_end;
+	for (volatile uint16_t *ptr_ = startaddr; ptr_ < (typeof(ptr_))endaddr; (ptr_ = (typeof(ptr_))((void *)ptr_ + 1))) {
+		unsigned long remaining = ((unsigned long)endaddr - (unsigned long)ptr_);
+		if (!(remaining%progressmodulo)) {
+			puts(RESETLINE); puts_hex(remaining/progressmodulo);
+		}
+		volatile uint16_t *ptr = ((void *)BITROR(
+			((unsigned long)ptr_ - (unsigned long)startaddr),
+			ptrbitsz, ptrbitpos_plus_ptrbitoff) + (unsigned long)startaddr);
+		if (((unsigned long)ptr & (unsigned long)0b1) /* skip if mis-aligned */ ||
+			ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
+			continue;
 		data = (BITROL(data, (8*sizeof(data)), 1) + *(uint16_t *)&ptr);
 		*ptr = data;
 		uint16_t ptrval = *ptr;
@@ -371,18 +408,22 @@ unsigned long mem16test (void *startaddr, void *endaddr) {
 			puts("\nexpect == 0x"); puts_hex(data); putchar('\n');
 			return 0;
 		}
-		unsigned long remaining = (unsigned long)endaddr - (unsigned long)ptr;
-		if (!(remaining%progressmodulo)) {
-			puts(RESETLINE); puts_hex(remaining/progressmodulo);
-		}
 	}
 
 	puts(RESETLINE"wrote pattern\n");
 
 	// Invert pattern written above.
-	for (volatile uint16_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
-		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
-			ptr = (typeof(ptr))&_end;
+	for (volatile uint16_t *ptr_ = startaddr; ptr_ < (typeof(ptr_))endaddr; (ptr_ = (typeof(ptr_))((void *)ptr_ + 1))) {
+		unsigned long remaining = ((unsigned long)endaddr - (unsigned long)ptr_);
+		if (!(remaining%progressmodulo)) {
+			puts(RESETLINE); puts_hex(remaining/progressmodulo);
+		}
+		volatile uint16_t *ptr = ((void *)BITROR(
+			((unsigned long)ptr_ - (unsigned long)startaddr),
+			ptrbitsz, ptrbitpos_plus_ptrbitoff) + (unsigned long)startaddr);
+		if (((unsigned long)ptr & (unsigned long)0b1) /* skip if mis-aligned */ ||
+			ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
+			continue;
 		// This test the instruction ldst.
 		data = (uint16_t)PATTERN2;
 		__asm__ __volatile__ ("ldst16 %0, %1" : "+r"(data) : "r" (ptr));
@@ -402,19 +443,23 @@ unsigned long mem16test (void *startaddr, void *endaddr) {
 			puts("\nexpect == 0x"); puts_hex(data); putchar('\n');
 			return 0;
 		}
-		unsigned long remaining = (unsigned long)endaddr - (unsigned long)ptr;
-		if (!(remaining%progressmodulo)) {
-			puts(RESETLINE); puts_hex(remaining/progressmodulo);
-		}
 	}
 
 	puts(RESETLINE"wrote inverted pattern\n");
 
 	// Retrieve inverted pattern written above.
 	data = (uint16_t)PATTERN1;
-	for (volatile uint16_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
-		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
-			ptr = (typeof(ptr))&_end;
+	for (volatile uint16_t *ptr_ = startaddr; ptr_ < (typeof(ptr_))endaddr; (ptr_ = (typeof(ptr_))((void *)ptr_ + 1))) {
+		unsigned long remaining = ((unsigned long)endaddr - (unsigned long)ptr_);
+		if (!(remaining%progressmodulo)) {
+			puts(RESETLINE); puts_hex(remaining/progressmodulo);
+		}
+		volatile uint16_t *ptr = ((void *)BITROR(
+			((unsigned long)ptr_ - (unsigned long)startaddr),
+			ptrbitsz, ptrbitpos_plus_ptrbitoff) + (unsigned long)startaddr);
+		if (((unsigned long)ptr & (unsigned long)0b1) /* skip if mis-aligned */ ||
+			ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
+			continue;
 		data = (BITROL(data, (8*sizeof(data)), 1) + *(uint16_t *)&ptr);
 		uint16_t ptrval = *ptr;
 		if (ptrval != (uint16_t)~data) {
@@ -423,19 +468,23 @@ unsigned long mem16test (void *startaddr, void *endaddr) {
 			puts("\nexpect == 0x"); puts_hex((uint16_t)~data); putchar('\n');
 			return 0;
 		}
-		unsigned long remaining = (unsigned long)endaddr - (unsigned long)ptr;
-		if (!(remaining%progressmodulo)) {
-			puts(RESETLINE); puts_hex(remaining/progressmodulo);
-		}
 	}
 
 	puts(RESETLINE"verified pattern\n");
 
 	data = (uint16_t)PATTERN2;
 
-	for (volatile uint16_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
-		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
-			ptr = (typeof(ptr))&_end;
+	for (volatile uint16_t *ptr_ = startaddr; ptr_ < (typeof(ptr_))endaddr; (ptr_ = (typeof(ptr_))((void *)ptr_ + 1))) {
+		unsigned long remaining = ((unsigned long)endaddr - (unsigned long)ptr_);
+		if (!(remaining%progressmodulo)) {
+			puts(RESETLINE); puts_hex(remaining/progressmodulo);
+		}
+		volatile uint16_t *ptr = ((void *)BITROR(
+			((unsigned long)ptr_ - (unsigned long)startaddr),
+			ptrbitsz, ptrbitpos_plus_ptrbitoff) + (unsigned long)startaddr);
+		if (((unsigned long)ptr & (unsigned long)0b1) /* skip if mis-aligned */ ||
+			ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
+			continue;
 		data += 1;
 		*ptr = data;
 		uint16_t ptrval = *ptr;
@@ -445,10 +494,6 @@ unsigned long mem16test (void *startaddr, void *endaddr) {
 			puts("\nexpect == 0x"); puts_hex(data); putchar('\n');
 			return 0;
 		}
-		unsigned long remaining = (unsigned long)endaddr - (unsigned long)ptr;
-		if (!(remaining%progressmodulo)) {
-			puts(RESETLINE); puts_hex(remaining/progressmodulo);
-		}
 	}
 
 	puts(RESETLINE"wrote retention pattern\n");
@@ -456,9 +501,17 @@ unsigned long mem16test (void *startaddr, void *endaddr) {
 	data = (uint16_t)PATTERN2;
 
 	// Retrieve pattern written above.
-	for (volatile uint16_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
-		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
-			ptr = (typeof(ptr))&_end;
+	for (volatile uint16_t *ptr_ = startaddr; ptr_ < (typeof(ptr_))endaddr; (ptr_ = (typeof(ptr_))((void *)ptr_ + 1))) {
+		unsigned long remaining = ((unsigned long)endaddr - (unsigned long)ptr_);
+		if (!(remaining%progressmodulo)) {
+			puts(RESETLINE); puts_hex(remaining/progressmodulo);
+		}
+		volatile uint16_t *ptr = ((void *)BITROR(
+			((unsigned long)ptr_ - (unsigned long)startaddr),
+			ptrbitsz, ptrbitpos_plus_ptrbitoff) + (unsigned long)startaddr);
+		if (((unsigned long)ptr & (unsigned long)0b1) /* skip if mis-aligned */ ||
+			ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
+			continue;
 		data += 1;
 		uint16_t ptrval = *ptr;
 		if (ptrval != data) {
@@ -466,10 +519,6 @@ unsigned long mem16test (void *startaddr, void *endaddr) {
 			puts("\nptrval == 0x"); puts_hex(ptrval);
 			puts("\nexpect == 0x"); puts_hex(data); putchar('\n');
 			return 0;
-		}
-		unsigned long remaining = (unsigned long)endaddr - (unsigned long)ptr;
-		if (!(remaining%progressmodulo)) {
-			puts(RESETLINE); puts_hex(remaining/progressmodulo);
 		}
 	}
 
@@ -483,9 +532,17 @@ unsigned long mem16test (void *startaddr, void *endaddr) {
 unsigned long mem32test (void *startaddr, void *endaddr) {
 
 	uint32_t data = (uint32_t)PATTERN1;
-	for (volatile uint32_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
-		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
-			ptr = (typeof(ptr))&_end;
+	for (volatile uint32_t *ptr_ = startaddr; ptr_ < (typeof(ptr_))endaddr; (ptr_ = (typeof(ptr_))((void *)ptr_ + 1))) {
+		unsigned long remaining = ((unsigned long)endaddr - (unsigned long)ptr_);
+		if (!(remaining%progressmodulo)) {
+			puts(RESETLINE); puts_hex(remaining/progressmodulo);
+		}
+		volatile uint32_t *ptr = ((void *)BITROR(
+			((unsigned long)ptr_ - (unsigned long)startaddr),
+			ptrbitsz, ptrbitpos_plus_ptrbitoff) + (unsigned long)startaddr);
+		if (((unsigned long)ptr & (unsigned long)0b11) /* skip if mis-aligned */ ||
+			ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
+			continue;
 		data = (BITROL(data, (8*sizeof(data)), 1) + *(uint32_t *)&ptr);
 		*ptr = data;
 		uint32_t ptrval = *ptr;
@@ -495,18 +552,22 @@ unsigned long mem32test (void *startaddr, void *endaddr) {
 			puts("\nexpect == 0x"); puts_hex(data); putchar('\n');
 			return 0;
 		}
-		unsigned long remaining = (unsigned long)endaddr - (unsigned long)ptr;
-		if (!(remaining%progressmodulo)) {
-			puts(RESETLINE); puts_hex(remaining/progressmodulo);
-		}
 	}
 
 	puts(RESETLINE"wrote pattern\n");
 
 	// Invert pattern written above.
-	for (volatile uint32_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
-		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
-			ptr = (typeof(ptr))&_end;
+	for (volatile uint32_t *ptr_ = startaddr; ptr_ < (typeof(ptr_))endaddr; (ptr_ = (typeof(ptr_))((void *)ptr_ + 1))) {
+		unsigned long remaining = ((unsigned long)endaddr - (unsigned long)ptr_);
+		if (!(remaining%progressmodulo)) {
+			puts(RESETLINE); puts_hex(remaining/progressmodulo);
+		}
+		volatile uint32_t *ptr = ((void *)BITROR(
+			((unsigned long)ptr_ - (unsigned long)startaddr),
+			ptrbitsz, ptrbitpos_plus_ptrbitoff) + (unsigned long)startaddr);
+		if (((unsigned long)ptr & (unsigned long)0b11) /* skip if mis-aligned */ ||
+			ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
+			continue;
 		// This test the instruction ldst.
 		data = (uint32_t)PATTERN2;
 		__asm__ __volatile__ ("ldst32 %0, %1" : "+r"(data) : "r" (ptr));
@@ -526,19 +587,23 @@ unsigned long mem32test (void *startaddr, void *endaddr) {
 			puts("\nexpect == 0x"); puts_hex(data); putchar('\n');
 			return 0;
 		}
-		unsigned long remaining = (unsigned long)endaddr - (unsigned long)ptr;
-		if (!(remaining%progressmodulo)) {
-			puts(RESETLINE); puts_hex(remaining/progressmodulo);
-		}
 	}
 
 	puts(RESETLINE"wrote inverted pattern\n");
 
 	// Retrieve inverted pattern written above.
 	data = (uint32_t)PATTERN1;
-	for (volatile uint32_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
-		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
-			ptr = (typeof(ptr))&_end;
+	for (volatile uint32_t *ptr_ = startaddr; ptr_ < (typeof(ptr_))endaddr; (ptr_ = (typeof(ptr_))((void *)ptr_ + 1))) {
+		unsigned long remaining = ((unsigned long)endaddr - (unsigned long)ptr_);
+		if (!(remaining%progressmodulo)) {
+			puts(RESETLINE); puts_hex(remaining/progressmodulo);
+		}
+		volatile uint32_t *ptr = ((void *)BITROR(
+			((unsigned long)ptr_ - (unsigned long)startaddr),
+			ptrbitsz, ptrbitpos_plus_ptrbitoff) + (unsigned long)startaddr);
+		if (((unsigned long)ptr & (unsigned long)0b11) /* skip if mis-aligned */ ||
+			ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
+			continue;
 		data = (BITROL(data, (8*sizeof(data)), 1) + *(uint32_t *)&ptr);
 		uint32_t ptrval = *ptr;
 		if (ptrval != (uint32_t)~data) {
@@ -547,19 +612,23 @@ unsigned long mem32test (void *startaddr, void *endaddr) {
 			puts("\nexpect == 0x"); puts_hex((uint32_t)~data); putchar('\n');
 			return 0;
 		}
-		unsigned long remaining = (unsigned long)endaddr - (unsigned long)ptr;
-		if (!(remaining%progressmodulo)) {
-			puts(RESETLINE); puts_hex(remaining/progressmodulo);
-		}
 	}
 
 	puts(RESETLINE"verified pattern\n");
 
 	data = (uint32_t)PATTERN2;
 
-	for (volatile uint32_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
-		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
-			ptr = (typeof(ptr))&_end;
+	for (volatile uint32_t *ptr_ = startaddr; ptr_ < (typeof(ptr_))endaddr; (ptr_ = (typeof(ptr_))((void *)ptr_ + 1))) {
+		unsigned long remaining = ((unsigned long)endaddr - (unsigned long)ptr_);
+		if (!(remaining%progressmodulo)) {
+			puts(RESETLINE); puts_hex(remaining/progressmodulo);
+		}
+		volatile uint32_t *ptr = ((void *)BITROR(
+			((unsigned long)ptr_ - (unsigned long)startaddr),
+			ptrbitsz, ptrbitpos_plus_ptrbitoff) + (unsigned long)startaddr);
+		if (((unsigned long)ptr & (unsigned long)0b11) /* skip if mis-aligned */ ||
+			ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
+			continue;
 		data += 1;
 		*ptr = data;
 		uint32_t ptrval = *ptr;
@@ -569,10 +638,6 @@ unsigned long mem32test (void *startaddr, void *endaddr) {
 			puts("\nexpect == 0x"); puts_hex(data); putchar('\n');
 			return 0;
 		}
-		unsigned long remaining = (unsigned long)endaddr - (unsigned long)ptr;
-		if (!(remaining%progressmodulo)) {
-			puts(RESETLINE); puts_hex(remaining/progressmodulo);
-		}
 	}
 
 	puts(RESETLINE"wrote retention pattern\n");
@@ -580,9 +645,17 @@ unsigned long mem32test (void *startaddr, void *endaddr) {
 	data = (uint32_t)PATTERN2;
 
 	// Retrieve pattern written above.
-	for (volatile uint32_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
-		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
-			ptr = (typeof(ptr))&_end;
+	for (volatile uint32_t *ptr_ = startaddr; ptr_ < (typeof(ptr_))endaddr; (ptr_ = (typeof(ptr_))((void *)ptr_ + 1))) {
+		unsigned long remaining = ((unsigned long)endaddr - (unsigned long)ptr_);
+		if (!(remaining%progressmodulo)) {
+			puts(RESETLINE); puts_hex(remaining/progressmodulo);
+		}
+		volatile uint32_t *ptr = ((void *)BITROR(
+			((unsigned long)ptr_ - (unsigned long)startaddr),
+			ptrbitsz, ptrbitpos_plus_ptrbitoff) + (unsigned long)startaddr);
+		if (((unsigned long)ptr & (unsigned long)0b11) /* skip if mis-aligned */ ||
+			ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
+			continue;
 		data += 1;
 		uint32_t ptrval = *ptr;
 		if (ptrval != data) {
@@ -590,10 +663,6 @@ unsigned long mem32test (void *startaddr, void *endaddr) {
 			puts("\nptrval == 0x"); puts_hex(ptrval);
 			puts("\nexpect == 0x"); puts_hex(data); putchar('\n');
 			return 0;
-		}
-		unsigned long remaining = (unsigned long)endaddr - (unsigned long)ptr;
-		if (!(remaining%progressmodulo)) {
-			puts(RESETLINE); puts_hex(remaining/progressmodulo);
 		}
 	}
 
@@ -607,9 +676,17 @@ unsigned long mem32test (void *startaddr, void *endaddr) {
 unsigned long mem64test (void *startaddr, void *endaddr) {
 
 	uint64_t data = (uint64_t)PATTERN1;
-	for (volatile uint64_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
-		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
-			ptr = (typeof(ptr))&_end;
+	for (volatile uint64_t *ptr_ = startaddr; ptr_ < (typeof(ptr_))endaddr; (ptr_ = (typeof(ptr_))((void *)ptr_ + 1))) {
+		unsigned long remaining = ((unsigned long)endaddr - (unsigned long)ptr_);
+		if (!(remaining%progressmodulo)) {
+			puts(RESETLINE); puts_hex(remaining/progressmodulo);
+		}
+		volatile uint64_t *ptr = ((void *)BITROR(
+			((unsigned long)ptr_ - (unsigned long)startaddr),
+			ptrbitsz, ptrbitpos_plus_ptrbitoff) + (unsigned long)startaddr);
+		if (((unsigned long)ptr & (unsigned long)0b111) /* skip if mis-aligned */ ||
+			ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
+			continue;
 		data = (BITROL(data, (8*sizeof(data)), 1) + *(uint64_t *)&ptr);
 		*ptr = data;
 		uint64_t ptrval = *ptr;
@@ -619,18 +696,22 @@ unsigned long mem64test (void *startaddr, void *endaddr) {
 			puts("\nexpect == 0x"); puts_hex(data); putchar('\n');
 			return 0;
 		}
-		unsigned long remaining = (unsigned long)endaddr - (unsigned long)ptr;
-		if (!(remaining%progressmodulo)) {
-			puts(RESETLINE); puts_hex(remaining/progressmodulo);
-		}
 	}
 
 	puts(RESETLINE"wrote pattern\n");
 
 	// Invert pattern written above.
-	for (volatile uint64_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
-		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
-			ptr = (typeof(ptr))&_end;
+	for (volatile uint64_t *ptr_ = startaddr; ptr_ < (typeof(ptr_))endaddr; (ptr_ = (typeof(ptr_))((void *)ptr_ + 1))) {
+		unsigned long remaining = ((unsigned long)endaddr - (unsigned long)ptr_);
+		if (!(remaining%progressmodulo)) {
+			puts(RESETLINE); puts_hex(remaining/progressmodulo);
+		}
+		volatile uint64_t *ptr = ((void *)BITROR(
+			((unsigned long)ptr_ - (unsigned long)startaddr),
+			ptrbitsz, ptrbitpos_plus_ptrbitoff) + (unsigned long)startaddr);
+		if (((unsigned long)ptr & (unsigned long)0b111) /* skip if mis-aligned */ ||
+			ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
+			continue;
 		// This test the instruction ldst.
 		data = (uint64_t)PATTERN2;
 		__asm__ __volatile__ ("ldst64 %0, %1" : "+r"(data) : "r" (ptr));
@@ -650,19 +731,23 @@ unsigned long mem64test (void *startaddr, void *endaddr) {
 			puts("\nexpect == 0x"); puts_hex(data); putchar('\n');
 			return 0;
 		}
-		unsigned long remaining = (unsigned long)endaddr - (unsigned long)ptr;
-		if (!(remaining%progressmodulo)) {
-			puts(RESETLINE); puts_hex(remaining/progressmodulo);
-		}
 	}
 
 	puts(RESETLINE"wrote inverted pattern\n");
 
 	// Retrieve inverted pattern written above.
 	data = (uint64_t)PATTERN1;
-	for (volatile uint64_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
-		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
-			ptr = (typeof(ptr))&_end;
+	for (volatile uint64_t *ptr_ = startaddr; ptr_ < (typeof(ptr_))endaddr; (ptr_ = (typeof(ptr_))((void *)ptr_ + 1))) {
+		unsigned long remaining = ((unsigned long)endaddr - (unsigned long)ptr_);
+		if (!(remaining%progressmodulo)) {
+			puts(RESETLINE); puts_hex(remaining/progressmodulo);
+		}
+		volatile uint64_t *ptr = ((void *)BITROR(
+			((unsigned long)ptr_ - (unsigned long)startaddr),
+			ptrbitsz, ptrbitpos_plus_ptrbitoff) + (unsigned long)startaddr);
+		if (((unsigned long)ptr & (unsigned long)0b111) /* skip if mis-aligned */ ||
+			ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
+			continue;
 		data = (BITROL(data, (8*sizeof(data)), 1) + *(uint64_t *)&ptr);
 		uint64_t ptrval = *ptr;
 		if (ptrval != (uint64_t)~data) {
@@ -671,19 +756,23 @@ unsigned long mem64test (void *startaddr, void *endaddr) {
 			puts("\nexpect == 0x"); puts_hex((uint64_t)~data); putchar('\n');
 			return 0;
 		}
-		unsigned long remaining = (unsigned long)endaddr - (unsigned long)ptr;
-		if (!(remaining%progressmodulo)) {
-			puts(RESETLINE); puts_hex(remaining/progressmodulo);
-		}
 	}
 
 	puts(RESETLINE"verified pattern\n");
 
 	data = (uint64_t)PATTERN2;
 
-	for (volatile uint64_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
-		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
-			ptr = (typeof(ptr))&_end;
+	for (volatile uint64_t *ptr_ = startaddr; ptr_ < (typeof(ptr_))endaddr; (ptr_ = (typeof(ptr_))((void *)ptr_ + 1))) {
+		unsigned long remaining = ((unsigned long)endaddr - (unsigned long)ptr_);
+		if (!(remaining%progressmodulo)) {
+			puts(RESETLINE); puts_hex(remaining/progressmodulo);
+		}
+		volatile uint64_t *ptr = ((void *)BITROR(
+			((unsigned long)ptr_ - (unsigned long)startaddr),
+			ptrbitsz, ptrbitpos_plus_ptrbitoff) + (unsigned long)startaddr);
+		if (((unsigned long)ptr & (unsigned long)0b111) /* skip if mis-aligned */ ||
+			ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
+			continue;
 		data += 1;
 		*ptr = data;
 		uint64_t ptrval = *ptr;
@@ -693,10 +782,6 @@ unsigned long mem64test (void *startaddr, void *endaddr) {
 			puts("\nexpect == 0x"); puts_hex(data); putchar('\n');
 			return 0;
 		}
-		unsigned long remaining = (unsigned long)endaddr - (unsigned long)ptr;
-		if (!(remaining%progressmodulo)) {
-			puts(RESETLINE); puts_hex(remaining/progressmodulo);
-		}
 	}
 
 	puts(RESETLINE"wrote retention pattern\n");
@@ -704,9 +789,17 @@ unsigned long mem64test (void *startaddr, void *endaddr) {
 	data = (uint64_t)PATTERN2;
 
 	// Retrieve pattern written above.
-	for (volatile uint64_t *ptr = startaddr; ptr < (typeof(ptr))endaddr; ++ptr) {
-		if (ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
-			ptr = (typeof(ptr))&_end;
+	for (volatile uint64_t *ptr_ = startaddr; ptr_ < (typeof(ptr_))endaddr; (ptr_ = (typeof(ptr_))((void *)ptr_ + 1))) {
+		unsigned long remaining = ((unsigned long)endaddr - (unsigned long)ptr_);
+		if (!(remaining%progressmodulo)) {
+			puts(RESETLINE); puts_hex(remaining/progressmodulo);
+		}
+		volatile uint64_t *ptr = ((void *)BITROR(
+			((unsigned long)ptr_ - (unsigned long)startaddr),
+			ptrbitsz, ptrbitpos_plus_ptrbitoff) + (unsigned long)startaddr);
+		if (((unsigned long)ptr & (unsigned long)0b111) /* skip if mis-aligned */ ||
+			ptr >= (typeof(ptr))&__executable_start && ptr < (typeof(ptr))&_end)
+			continue;
 		data += 1;
 		uint64_t ptrval = *ptr;
 		if (ptrval != data) {
@@ -714,10 +807,6 @@ unsigned long mem64test (void *startaddr, void *endaddr) {
 			puts("\nptrval == 0x"); puts_hex(ptrval);
 			puts("\nexpect == 0x"); puts_hex(data); putchar('\n');
 			return 0;
-		}
-		unsigned long remaining = (unsigned long)endaddr - (unsigned long)ptr;
-		if (!(remaining%progressmodulo)) {
-			puts(RESETLINE); puts_hex(remaining/progressmodulo);
 		}
 	}
 
