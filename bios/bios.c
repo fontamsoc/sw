@@ -195,13 +195,15 @@ int putchar (int c) {
 #include <stdio.h>
 
 #define puts_hex(I) ({ \
-	inline unsigned char gethex (unsigned char c) { \
+	inline unsigned char digit (unsigned char c) { \
 		c = (c+((c>=10)?('a'-10):'0')); \
 		return c; \
 	} \
+	unsigned Ival = (I); \
+	unsigned Isz = sizeof(I); \
 	unsigned i; \
-	for (i = 0; i < (2*sizeof(I)); ++i) \
-		putchar(gethex((I>>(((8*sizeof(I))-4)-(i*4)))&0xf)); \
+	for (i = 0; i < (2*Isz); ++i) \
+		putchar(digit((Ival>>(((8*Isz)-4)-(i*4)))&0xf)); \
 	i; \
 })
 

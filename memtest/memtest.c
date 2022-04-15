@@ -134,11 +134,13 @@ int putchar (int c) {
 		c = (c+((c>=10)?('a'-10):'0')); \
 		return c; \
 	} \
+	unsigned Ival = (I); \
+	unsigned Isz = sizeof(I); \
 	unsigned i, j; \
-	if (!(I)) \
+	if (!(Ival)) \
 		putchar('0'); \
-	else for (i = 0, j = 0; i < (2*sizeof(I)); ++i) { \
-		unsigned char c = (I>>(((8*sizeof(I))-4)-(i*4))); \
+	else for (i = 0, j = 0; i < (2*Isz); ++i) { \
+		unsigned char c = (Ival>>(((8*Isz)-4)-(i*4))); \
 		if (j |= c) \
 			putchar(digit(c&0xf)); \
 	} \
