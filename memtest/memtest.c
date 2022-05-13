@@ -134,7 +134,7 @@ int putchar (int c) {
 		c = (c+((c>=10)?('a'-10):'0')); \
 		return c; \
 	} \
-	unsigned Ival = (I); \
+	typeof(I) Ival = (I); \
 	unsigned Isz = sizeof(I); \
 	unsigned i, j; \
 	if (!(Ival)) \
