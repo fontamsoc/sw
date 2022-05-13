@@ -168,6 +168,33 @@ void *memcpy (void *dst, const void *src, size_t cnt) {
 
 #include <stdint.h>
 
+typedef union {
+	struct {
+		unsigned long lo, hi;
+	};
+	uint64_t val;
+} clkcyclecnt;
+
+static clkcyclecnt getclkcyclecnt (void) {
+	inline unsigned long getclkcyclecnthi (void) {
+		unsigned long hi;
+		asm volatile ("getclkcyclecnth %0\n" : "=r"(hi));
+		return hi;
+	}
+	clkcyclecnt ret;
+	do {
+		ret.hi = getclkcyclecnthi();
+		asm volatile ("getclkcyclecnt %0\n"  : "=r"(ret.lo));
+	} while (ret.hi != getclkcyclecnthi());
+	return ret;
+}
+
+static unsigned long getclkfreq (void) {
+	unsigned long freq;
+	asm volatile ("getclkfreq %0\n" : "=r"(freq));
+	return freq;
+}
+
 // Structure describing the MBR.
 struct __attribute__((packed)) {
 	unsigned char bootcode[446];
@@ -246,6 +273,8 @@ __asm__ (
 	".size    ___biosend, (. - ___biosend)\n");
 
 __attribute__((noreturn)) void main (void) {
+
+	clkcyclecnt startclkcyclecnt = getclkcyclecnt();
 
 	hwdrvchar_init (&hwdrvchar_dev, UARTBAUD);
 
@@ -346,7 +375,12 @@ __attribute__((noreturn)) void main (void) {
 		hwdrvintctrl_ack(getcoreid(), 0);
 	}
 
-	puts("kernel loaded\r\n");
+	uint64_t loadtime_clkcyclecnt = (getclkcyclecnt().val - startclkcyclecnt.val);
+	unsigned long loadtime = (loadtime_clkcyclecnt / getclkfreq());
+	if (loadtime > 0xff)
+		loadtime = 0xff;
+
+	puts("kernel loaded "); puts_hex((uint8_t)loadtime); puts("\r\n");
 
 	#ifdef DO_KERNEL_HEXDUMP
 	hexdump ((void *)KERNELADDR, kernel_sect_cnt*BLKSZ);
