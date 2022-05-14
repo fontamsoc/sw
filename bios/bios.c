@@ -133,33 +133,14 @@ void *u8cpy (void *dst, const void *src, unsigned long cnt); __asm__ (
 	".size    u8cpy, (. - u8cpy)\n");
 
 #include <hwdrvdevtbl/hwdrvdevtbl.h>
-hwdrvdevtbl hwdrvdevtbl_dma = {.e = (devtblentry *)0, .id = 2 /* DMA engine */};
 hwdrvdevtbl hwdrvdevtbl_ram = {.e = (devtblentry *)0, .id = 1 /* RAM device */};
-
-#include <hwdrvdma/hwdrvdma.h>
-hwdrvdma hwdrvdma_dev = {.addr = (void *)-1};
 
 #include <hwdrvintctrl/hwdrvintctrl.h>
 
 typedef unsigned long size_t;
 
-unsigned long use_dma = 0;
-
 void *memcpy (void *dst, const void *src, size_t cnt) {
-	if (use_dma) {
-		#pragma GCC diagnostic push
-		#pragma GCC diagnostic ignored "-Wdiscarded-qualifiers"
-		hwdrvdma_xfer ( // dst and src regions will not be overlapping.
-			&hwdrvdma_dev,
-			dst, dst+cnt-1,
-			src, src+cnt-1,
-			cnt);
-		#pragma GCC diagnostic pop
-		do {
-			asm volatile ("halt; sysret\n" ::: "memory");
-		} while (hwdrvdma_xfer (&hwdrvdma_dev, 0, 0, 0, 0, -1));
-		__asm__ __volatile__ ("dcacherst" ::: "memory");
-	} else if (((unsigned long)dst|(unsigned long)src)%sizeof(unsigned long))
+	if (((unsigned long)dst|(unsigned long)src)%sizeof(unsigned long))
 		u8cpy (dst, src, cnt);
 	else
 		uintcpy (dst, src, (cnt/sizeof(unsigned long)));
@@ -337,19 +318,6 @@ __attribute__((noreturn)) void main (void) {
 		parkpu();
 	}
 
-	// Look for DMA engine.
-	if (hwdrvdevtbl_find (&hwdrvdevtbl_dma, 0), (hwdrvdevtbl_dma.mapsz && hwdrvdevtbl_dma.intridx >= 0)) {
-		hwdrvdma_dev.addr = hwdrvdevtbl_dma.addr;
-		hwdrvdma_sel (&hwdrvdma_dev, 0);
-		hwdrvintctrl_ack(getcoreid(), 1);
-		hwdrvintctrl_ena (hwdrvdevtbl_dma.intridx, 1);
-		asm volatile (
-			"li16 %%sr, 0x2000\n"
-			"setflags %%sr\n"
-			::: "memory", "%sr");
-		use_dma = 1;
-	}
-
 	// Adjust %ksl to enable caching throughout the memory region where the kernel is to be loaded.
 	asm volatile ("setksl %0\n" :: "r"(KERNELADDR+(((kernel_lba_end-kernel_lba_begin)+1)*BLKSZ)));
 
@@ -366,13 +334,6 @@ __attribute__((noreturn)) void main (void) {
 		unsigned long n = hwdrvblkdev_read (&hwdrvblkdev_dev, (void *)k, i, ((i + 1) <= kernel_lba_end));
 		k += (n*BLKSZ);
 		i += n;
-	}
-
-	// Disable use of DMA by BIOS to prevent conflict with the kernel.
-	if (use_dma) {
-		use_dma = 0;
-		hwdrvintctrl_ena (hwdrvdevtbl_dma.intridx, 0);
-		hwdrvintctrl_ack(getcoreid(), 0);
 	}
 
 	uint64_t loadtime_clkcyclecnt = (getclkcyclecnt().val - startclkcyclecnt.val);
