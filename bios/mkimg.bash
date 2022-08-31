@@ -156,6 +156,7 @@ fatpart_blksz=$(((32*1024*1024)/512))
 total_blksz=$((${firstblkidx}+${fatpart_blksz}+${bios_blksz}+${kernel_blksz}+${rootfs_blksz}))
 dd if=/dev/zero of="${blkdev}" bs=1M count=$(((${total_blksz}/2048)+((${total_blksz}%2048)>0))) status=progress
 
+unset isloopdev
 [ -b "${blkdev}" ] || {
 	initial_blkdev=${blkdev}
 	blkdev=$(losetup --show -P -f "${blkdev}")
@@ -166,11 +167,16 @@ dd if=/dev/zero of="${blkdev}" bs=1M count=$(((${total_blksz}/2048)+((${total_bl
 	isloopdev="p"
 }
 
+function rmloopdev {
+	rm -rf ${blkdev}p*
+	losetup -d "${blkdev}"
+}
+
 # trap ctrl-c and call ctrl_c()
 trap ctrl_c INT
 
 function ctrl_c {
-	[ -n "${isloopdev}" ] && losetup -d "${blkdev}"
+	[ -n "${isloopdev}" ] && rmloopdev
 	[ -n "${tmpdir}" ] && rm -rf "${tmpdir}"
 	exit 1
 }
@@ -189,11 +195,11 @@ $((${firstblkidx}+${fatpart_blksz}+${bios_blksz}+${kernel_blksz})), ${rootfs_blk
 __EOF__
 	{
 	echo error: sfdisk failed
-	[ -n "${isloopdev}" ] && losetup -d "${blkdev}"
+	[ -n "${isloopdev}" ] && rmloopdev
 	exit 1
 }
 
-# ### Used to insure that loop-device partitions get re-read.
+# Create loop-device partitions.
 [ -n "${isloopdev}" ] && {
 	losetup -d "${blkdev}"
 	blkdev=$(losetup --show -P -f "${initial_blkdev}")
@@ -201,11 +207,19 @@ __EOF__
 		echo error: losetup failed
 		exit 1
 	}
+	blkparts=$(lsblk -rn -o 'MAJ:MIN' "${blkdev}" | tail -n +2)
+	cntr=1
+	for i in ${blkparts}; do
+		maj=$(echo $i | cut -d: -f1)
+		min=$(echo $i | cut -d: -f2)
+		blkpart="${blkdev}p${cntr}"
+		rm -rf "${blkpart}"
+		mknod ${blkpart} b ${maj} ${min}
+		cntr=$((cntr + 1))
+	done
 }
 
 partprobe "${blkdev}"
-
-sleep 1 ### Give time to the kernel to create files under /dev/ .
 
 # Check that partitions block devices exist under /dev/ .
 [	-b "${blkdev}${isloopdev}1" -a \
@@ -213,7 +227,7 @@ sleep 1 ### Give time to the kernel to create files under /dev/ .
 	-b "${blkdev}${isloopdev}3" -a \
 	-b "${blkdev}${isloopdev}4" ] || {
 	echo error: partitions block devices missing from /dev/
-	[ -n "${isloopdev}" ] && losetup -d "${blkdev}"
+	[ -n "${isloopdev}" ] && rmloopdev
 	exit 1
 }
 
@@ -234,7 +248,7 @@ fi
 mkfs.fat -v -f1 ${blkdev}${isloopdev}1 || {
 	echo error: mkfs.fat failed
 	rm -rf ${tmpdir}
-	[ -n "${isloopdev}" ] && losetup -d "${blkdev}"
+	[ -n "${isloopdev}" ] && rmloopdev
 	exit 1
 }
 
@@ -242,20 +256,20 @@ mkfs.fat -v -f1 ${blkdev}${isloopdev}1 || {
 	tmpdir="$(mktemp -d)"
 	[ -z "${tmpdir}" ] && {
 		echo error: mktemp failed
-		[ -n "${isloopdev}" ] && losetup -d "${blkdev}"
+		[ -n "${isloopdev}" ] && rmloopdev
 		exit 1
 	}
 	mount -t vfat ${blkdev}${isloopdev}1 ${tmpdir} || {
 		echo error: mount failed
 		rm -rf ${tmpdir}
-		[ -n "${isloopdev}" ] && losetup -d "${blkdev}"
+		[ -n "${isloopdev}" ] && rmloopdev
 		exit 1
 	}
 	cp -r ${misc_files} ${tmpdir}/ || {
 		echo error: cpy failed
 		umount ${tmpdir}
 		rm -rf ${tmpdir}
-		[ -n "${isloopdev}" ] && losetup -d "${blkdev}"
+		[ -n "${isloopdev}" ] && rmloopdev
 		exit 1
 	}
 	sync "${blkdev}${isloopdev}1"
@@ -266,6 +280,6 @@ dd if="${opt_bios}" of="${blkdev}${isloopdev}2" bs=1M oflag=sync status=progress
 [ -f "${opt_kernel}" ] && dd if="${opt_kernel}" bs=1M of="${blkdev}${isloopdev}3" oflag=sync status=progress
 [ -f "${opt_rootfs}" ] && dd if="${opt_rootfs}" bs=1M of="${blkdev}${isloopdev}4" oflag=sync status=progress
 
-[ -n "${isloopdev}" ] && losetup -d "${blkdev}"
+[ -n "${isloopdev}" ] && rmloopdev
 
 exit 0
