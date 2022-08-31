@@ -153,7 +153,8 @@ set -x
 # 32MB to be used by the FAT32 partition.
 fatpart_blksz=$(((32*1024*1024)/512))
 
-dd if=/dev/zero of="${blkdev}" bs=512 count=$((${firstblkidx}+${fatpart_blksz}+${bios_blksz}+${kernel_blksz}+${rootfs_blksz})) status=progress
+total_blksz=$((${firstblkidx}+${fatpart_blksz}+${bios_blksz}+${kernel_blksz}+${rootfs_blksz}))
+dd if=/dev/zero of="${blkdev}" bs=1M count=$(((${total_blksz}/2048)+((${total_blksz}%2048)>0))) status=progress
 
 [ -b "${blkdev}" ] || {
 	initial_blkdev=${blkdev}
