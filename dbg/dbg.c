@@ -765,38 +765,38 @@ void decodeop (uint16_t opcode) {
 			break;
 		case 0x74:
 			// Specification from the instruction set manual:
-			// vld8 %gpr1, %gpr2 |14|100|rrrr|rrrr|
-			printf("vld8 ");
+			// ld8v %gpr1, %gpr2 |14|100|rrrr|rrrr|
+			printf("ld8v ");
 			decode2gpr();
 			break;
 		case 0x75:
 			// Specification from the instruction set manual:
-			// vld16 %gpr1, %gpr2 |14|101|rrrr|rrrr|
-			printf("vld16 ");
+			// ld16v %gpr1, %gpr2 |14|101|rrrr|rrrr|
+			printf("ld16v ");
 			decode2gpr();
 			break;
 		case 0x76:
 			// Specification from the instruction set manual:
-			// vld32 %gpr1, %gpr2 |14|110|rrrr|rrrr|
-			printf("vld32 ");
+			// ld32v %gpr1, %gpr2 |14|110|rrrr|rrrr|
+			printf("ld32v ");
 			decode2gpr();
 			break;
 		case 0x70:
 			// Specification from the instruction set manual:
-			// vst8 %gpr1, %gpr2 |14|000|rrrr|rrrr|
-			printf("vst8 ");
+			// st8v %gpr1, %gpr2 |14|000|rrrr|rrrr|
+			printf("st8v ");
 			decode2gpr();
 			break;
 		case 0x71:
 			// Specification from the instruction set manual:
-			// vst16 %gpr1, %gpr2 |14|001|rrrr|rrrr|
-			printf("vst16 ");
+			// st16v %gpr1, %gpr2 |14|001|rrrr|rrrr|
+			printf("st16v ");
 			decode2gpr();
 			break;
 		case 0x72:
 			// Specification from the instruction set manual:
-			// vst32 %gpr1, %gpr2 |14|010|rrrr|rrrr|
-			printf("vst32 ");
+			// st32v %gpr1, %gpr2 |14|010|rrrr|rrrr|
+			printf("st32v ");
 			decode2gpr();
 			break;
 		case 0xf8:
