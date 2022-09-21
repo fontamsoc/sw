@@ -219,7 +219,9 @@ __EOF__
 	done
 }
 
-partprobe "${blkdev}"
+sleep 1
+partprobe -s "${blkdev}"
+sleep 1
 
 # Check that partitions block devices exist under /dev/ .
 [	-b "${blkdev}${isloopdev}1" -a \
