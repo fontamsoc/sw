@@ -3,6 +3,8 @@
 # SPDX-License-Identifier: GPL-2.0-only
 # (c) William Fonkou Tambe
 
+set -e
+
 #TO_FIX_AT_INSTALL#prefix=""
 [ -z "${prefix}" ] && {
 	echo error: $(basename ${0}) was not correctly installed
@@ -207,19 +209,21 @@ __EOF__
 		echo error: losetup failed
 		exit 1
 	}
+	sleep 1
 	blkparts=$(lsblk -rn -o 'MAJ:MIN' "${blkdev}" | tail -n +2)
 	cntr=1
 	for i in ${blkparts}; do
 		maj=$(echo $i | cut -d: -f1)
 		min=$(echo $i | cut -d: -f2)
 		blkpart="${blkdev}p${cntr}"
-		rm -rf "${blkpart}"
-		mknod ${blkpart} b ${maj} ${min}
+		[ -b "${blkpart}" ] || {
+			rm -rf "${blkpart}"
+			mknod ${blkpart} b ${maj} ${min}
+		}
 		cntr=$((cntr + 1))
 	done
 }
 
-sleep 1
 partprobe -s "${blkdev}"
 sleep 1
 
