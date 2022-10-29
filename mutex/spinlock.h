@@ -19,7 +19,7 @@ static inline int arch_spin_trylock (arch_spinlock_t *m) {
 	++m->lock[1/*TICKET*/];
 	ret = 1;
 	done_unlock:
-	xchg(&m->lock[0/*LOCK*/], 0); // memory fenced version of: m->lock[0/*LOCK*/] = 0;
+	xchg(&m->lock[0/*LOCK*/], 0); // m->lock[0/*LOCK*/] = 0;
 	done:
 	return ret;
 }
@@ -30,13 +30,13 @@ static inline void arch_spin_lock (arch_spinlock_t *m) {
 	while ((m->lock[1/*TICKET*/] - m->lock[2/*CURRENT*/]) == -1)
 		/*cpu_relax()*/;
 	unsigned long i = m->lock[1/*TICKET*/]++;
-	xchg(&m->lock[0/*LOCK*/], 0); // memory fenced version of: m->lock[0/*LOCK*/] = 0;
+	xchg(&m->lock[0/*LOCK*/], 0); // m->lock[0/*LOCK*/] = 0;
 	while (m->lock[2/*CURRENT*/] != i)
 		/*cpu_relax()*/;
 }
 
 static inline void arch_spin_unlock (arch_spinlock_t *m) {
-	xchg(&m->lock[2/*CURRENT*/], (m->lock[2/*CURRENT*/]+1)); // memory fenced version of: ++m->lock[2/*CURRENT*/];
+	xchg(&m->lock[2/*CURRENT*/], (m->lock[2/*CURRENT*/]+1)); // ++m->lock[2/*CURRENT*/];
 }
 
 // Read-write spinlocks, allowing multiple readers but only one writer.
@@ -53,7 +53,7 @@ static inline int arch_read_trylock (arch_rwlock_t *m) {
 	++m->lock[3/*READERCNT*/];
 	ret = 1;
 	done_unlock:
-	xchg(&m->lock[0/*LOCK*/], 0); // memory fenced version of: m->lock[0/*LOCK*/] = 0;
+	xchg(&m->lock[0/*LOCK*/], 0); // m->lock[0/*LOCK*/] = 0;
 	done:
 	return ret;
 }
@@ -65,22 +65,22 @@ static inline void arch_read_lock (arch_rwlock_t *m) {
 		while ((m->lock[1/*TICKET*/] - m->lock[2/*CURRENT*/]) == -1)
 			/*cpu_relax()*/;
 		unsigned long i = m->lock[1/*TICKET*/]++;
-		xchg(&m->lock[0/*LOCK*/], 0); // memory fenced version of: m->lock[0/*LOCK*/] = 0;
+		xchg(&m->lock[0/*LOCK*/], 0); // m->lock[0/*LOCK*/] = 0;
 		while (m->lock[2/*CURRENT*/] != i)
 			/*cpu_relax()*/;
 		while (xchg(&m->lock[0/*LOCK*/], 1))
 			/*cpu_relax()*/;
-		xchg(&m->lock[2/*CURRENT*/], (i+1)); // memory fenced version of: ++m->lock[2/*CURRENT*/];
+		xchg(&m->lock[2/*CURRENT*/], (i+1)); // ++m->lock[2/*CURRENT*/];
 	}
 	++m->lock[3/*READERCNT*/];
-	xchg(&m->lock[0/*LOCK*/], 0); // memory fenced version of: m->lock[0/*LOCK*/] = 0;
+	xchg(&m->lock[0/*LOCK*/], 0); // m->lock[0/*LOCK*/] = 0;
 }
 
 static inline void arch_read_unlock (arch_rwlock_t *m) {
 	while (xchg(&m->lock[0/*LOCK*/], 1))
 		/*cpu_relax()*/;
 	--m->lock[3/*READERCNT*/];
-	xchg(&m->lock[0/*LOCK*/], 0); // memory fenced version of: m->lock[0/*LOCK*/] = 0;
+	xchg(&m->lock[0/*LOCK*/], 0); // m->lock[0/*LOCK*/] = 0;
 }
 
 static inline int arch_write_trylock (arch_rwlock_t *m) {

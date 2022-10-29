@@ -37,12 +37,12 @@ typedef struct {
 // It enters a spinlock until any other thread having acquired
 // the same mutex lock, calls mutex_unlock() to release it.
 // The order in which mutex locks are acquired is preserved.
-static inline void mutex_lock (volatile mutex* s) {
+static inline void mutex_lock (mutex* s) {
 	// Only one thread can have access to the field mutex.ticket.
 	// Loop until the lock is removed if there was already a lock.
 	__asm__ __volatile__ (
 		"rli %%sr, 0f; 0: ldst %0, %1; jnz %0, %%sr\n"
-		: "+r"((unsigned long){1}) : "r"(&s->lock));
+		: "+r"((unsigned long){1}) : "r"(&s->lock) : "memory");
 	#ifdef MUTEX_CHECK_ENOUGH_TICKET
 	// If there is not enough tickets, loop around until a ticket
 	// is made available.
@@ -51,17 +51,16 @@ static inline void mutex_lock (volatile mutex* s) {
 	// the value of the field mutex.current.
 	// -1 is the maximum value of an unsigned long.
 	while ((s->ticket - s->current) == -1)
-		__asm__ __volatile__ ("");
+		__asm__ __volatile__ ("" ::: "memory");
 	#endif
-	unsigned long ticket = s->ticket;
-	++s->ticket;
+	unsigned long ticket = s->ticket++;
 	s->lock = 0;
 	while (s->current != ticket)
-		__asm__ __volatile__ ("");
+		__asm__ __volatile__ ("" ::: "memory");
 }
 
 // This function releases a mutex lock.
-static inline void mutex_unlock (volatile mutex* s) {
+static inline void mutex_unlock (mutex* s) {
 	++s->current;
 }
 
