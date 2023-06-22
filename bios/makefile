@@ -21,9 +21,9 @@ LOADER_BIN := socloader.bin
 BIOS_ELF := socbios.elf
 BIOS_BIN := socbios.bin
 
-.PHONY: artifacts install clean
+.PHONY: all install clean
 
-artifacts: ${LOADER_BIN} ${BIOS_BIN} mksocimg.tmp
+all: ${LOADER_BIN} ${BIOS_BIN}
 	@echo ==== Stack Usage ====
 	@cat *.su
 	@echo =====================
@@ -47,23 +47,15 @@ ${BIOS_BIN}: bios.h bios.lds bios.c \
 		${BIOS_ELF} ${BIOS_BIN}
 	rm -rf version.h
 
-mksocimg.tmp: mkimg.bash
-	cp mkimg.bash mksocimg.tmp
-	# https://stackoverflow.com/questions/407523/escape-a-string-for-a-sed-replace-pattern
-	sed -i "s/#TO_FIX_AT_INSTALL#prefix=\"\"/prefix=\"$$(printf '%s\n' "${PREFIX}" | sed -e 's/[\/&]/\\&/g')\"/g" mksocimg.tmp
-
-install: artifacts
+install: all
 	mkdir -p ${PREFIX}/{bin,lib}/
 	for f in \
 		${LOADER_ELF} ${LOADER_BIN} \
 		${BIOS_ELF} ${BIOS_BIN} ; do \
 		cp $${f} ${PREFIX}/lib/$${f}; \
 	done
-	cp mksocimg.tmp ${PREFIX}/bin/${ARCH}-mksocimg
-	chmod +x ${PREFIX}/bin/${ARCH}-mksocimg
 
 clean:
 	rm -rf *.o *.su \
 		${LOADER_ELF} ${LOADER_BIN} \
-		${BIOS_ELF} ${BIOS_BIN} \
-		mksocimg.tmp
+		${BIOS_ELF} ${BIOS_BIN}
