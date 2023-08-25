@@ -266,7 +266,8 @@ __attribute__((noreturn)) void main (void) {
 	__asm__ __volatile__ (
 		"ldst %0, %1"
 		: "+r" (socversion)
-		: "r"  (DEVTBLADDR));
+		: "r"  (DEVTBLADDR)
+		: "memory");
 	puts("\r\nsoc  "); puts_hex(socversion); puts("\r\n");
 
 	puts(BIOSVERSION);
@@ -371,7 +372,8 @@ __attribute__((noreturn)) void main (void) {
 		"dcacherst\n"
 		"icacherst\n"
 		"jl %%rp, %1\n"
-		:: "r"(p), "r"(KERNELADDR));
+		:: "r"(p), "r"(KERNELADDR)
+		: "memory");
 
 	parkpu();
 }
@@ -873,7 +875,8 @@ savedkctx * syscallhdlr (savedkctx *kctx, unsigned long _) {
 			__asm__ __volatile__ (
 				"ldst %0, %1"
 				: "+r" (r1)
-				: "r"  (DEVTBLADDR+sizeof(unsigned long)));
+				: "r"  (DEVTBLADDR+sizeof(unsigned long))
+				: "memory");
 
 			goto done;
 

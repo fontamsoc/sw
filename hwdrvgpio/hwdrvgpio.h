@@ -27,7 +27,8 @@ static inline void hwdrvgpio_configureio (hwdrvgpio *dev, unsigned long arg) {
 	__asm__ __volatile__ (
 		"ldst %0, %1"
 		: "+r" (dev->iocnt)
-		: "r" (dev->addr));
+		: "r" (dev->addr)
+		: "memory");
 }
 
 // Configure clockcycle count ("arg") used to debounce inputs.
@@ -37,7 +38,8 @@ static inline void hwdrvgpio_setdebounce (hwdrvgpio *dev, unsigned long arg) {
 	__asm__ __volatile__ (
 		"ldst %0, %1"
 		: "+r" (dev->clkfreq)
-		: "r" (dev->addr));
+		: "r" (dev->addr)
+		: "memory");
 }
 
 #endif /* HWDRVGPIO_H */

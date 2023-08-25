@@ -33,7 +33,8 @@ static inline unsigned long hwdrvintctrl_ack (unsigned long idx, unsigned long e
 	__asm__ __volatile__ (
 		"ldst %0, %1"
 		: "+r" (intsrc)
-		: "r" (INTCTRLADDR));
+		: "r" (INTCTRLADDR)
+		: "memory");
 	return intsrc;
 }
 
@@ -42,7 +43,8 @@ static inline unsigned long hwdrvintctrl_int (unsigned long idx) {
 	__asm__ __volatile__ (
 		"ldst %0, %1"
 		: "+r" (intdst)
-		: "r" (INTCTRLADDR));
+		: "r" (INTCTRLADDR)
+		: "memory");
 	return intdst;
 }
 
@@ -51,7 +53,8 @@ static inline unsigned long hwdrvintctrl_ena (unsigned long idx, unsigned long e
 	__asm__ __volatile__ (
 		"ldst %0, %1"
 		: "+r" (intsrc)
-		: "r" (INTCTRLADDR));
+		: "r" (INTCTRLADDR)
+		: "memory");
 	return intsrc;
 }
 

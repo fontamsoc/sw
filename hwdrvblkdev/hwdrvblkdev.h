@@ -39,7 +39,8 @@ static signed long hwdrvblkdev_isrdy (hwdrvblkdev *dev) {
 	__asm__ __volatile__ (
 		"ldst %0, %1"
 		: "+r" (n)
-		: "r" (dev->addr+HWDRVBLKDEV_RESET));
+		: "r" (dev->addr+HWDRVBLKDEV_RESET)
+		: "memory");
 	if (n == HWDRVBLKDEV_POWEROFF || n == HWDRVBLKDEV_ERROR)
 		return -1;
 	return ((n == HWDRVBLKDEV_READY) ? 1 : (hwdrvblkdev_isbsy ? (hwdrvblkdev_isbsy(), 0) : 0));
@@ -61,7 +62,8 @@ static unsigned long hwdrvblkdev_init (hwdrvblkdev *dev, unsigned long idx) {
 	__asm__ __volatile__ (
 		"ldst %0, %1"
 		: "+r" ((unsigned long){1})
-		: "r" (addr+HWDRVBLKDEV_RESET));
+		: "r" (addr+HWDRVBLKDEV_RESET)
+		: "memory");
 	// Read status until ready is returned.
 	signed long isrdy;
 	do {
@@ -73,7 +75,8 @@ static unsigned long hwdrvblkdev_init (hwdrvblkdev *dev, unsigned long idx) {
 	__asm__ __volatile__ (
 		"ldst %0, %1"
 		: "+r" (dev->blkcnt)
-		: "r" (addr+HWDRVBLKDEV_READ));
+		: "r" (addr+HWDRVBLKDEV_READ)
+		: "memory");
 	// Read status until ready is returned.
 	do {
 		if ((isrdy = hwdrvblkdev_isrdy (dev)) < 0)
@@ -82,7 +85,8 @@ static unsigned long hwdrvblkdev_init (hwdrvblkdev *dev, unsigned long idx) {
 	// Present the loaded data in the physical memory.
 	__asm__ __volatile__ (
 		"ldst %%sr, %0"
-		:: "r" (addr+HWDRVBLKDEV_SWAP));
+		:: "r" (addr+HWDRVBLKDEV_SWAP)
+		: "memory");
 	hwdrvblkdev_read_ptr_saved = (void *)-1;
 	hwdrvblkdev_read_idx_saved = -1;
 	hwdrvblkdev_write_ptr_saved = (void *)-1;
@@ -106,7 +110,8 @@ static unsigned long hwdrvblkdev_read (hwdrvblkdev *dev, void* ptr, unsigned lon
 	__asm__ __volatile__ (
 		"ldst %0, %1"
 		: "+r" ((unsigned long){idx})
-		: "r" (addr+HWDRVBLKDEV_READ));
+		: "r" (addr+HWDRVBLKDEV_READ)
+		: "memory");
 	hwdrvblkdev_read_ptr_saved = ptr;
 	hwdrvblkdev_read_idx_saved = idx;
 	return 0;
@@ -114,14 +119,16 @@ static unsigned long hwdrvblkdev_read (hwdrvblkdev *dev, void* ptr, unsigned lon
 	// Present the loaded data in the physical memory.
 	__asm__ __volatile__ (
 		"ldst %%sr, %0"
-		:: "r" (addr+HWDRVBLKDEV_SWAP));
+		:: "r" (addr+HWDRVBLKDEV_SWAP)
+		: "memory");
 	if (nxt) {
 		idx += 1;
 		// Initiate the next block read.
 		__asm__ __volatile__ (
 			"ldst %0, %1"
 			: "+r" ((unsigned long){idx})
-			: "r" (addr+HWDRVBLKDEV_READ));
+			: "r" (addr+HWDRVBLKDEV_READ)
+			: "memory");
 		hwdrvblkdev_read_ptr_saved = (ptr + BLKSZ);
 		hwdrvblkdev_read_idx_saved = idx;
 	} else {
@@ -148,12 +155,14 @@ static void hwdrvblkdev_write (hwdrvblkdev *dev, void* ptr, unsigned long idx, u
 	// Present the data to the controller.
 	__asm__ __volatile__ (
 		"ldst %%sr, %0"
-		:: "r" (addr+HWDRVBLKDEV_SWAP));
+		:: "r" (addr+HWDRVBLKDEV_SWAP)
+		: "memory");
 	// Initiate the block write.
 	__asm__ __volatile__ (
 		"ldst %0, %1"
 		: "+r" ((unsigned long){idx})
-		: "r" (addr+HWDRVBLKDEV_WRITE));
+		: "r" (addr+HWDRVBLKDEV_WRITE)
+		: "memory");
 	if (nxt) {
 		ptr += BLKSZ;
 		// Fill controller up with next data to write.
@@ -195,7 +204,8 @@ static unsigned long hwdrvblkdev_cpy (hwdrvblkdev *dev, unsigned long dstidx, un
 		__asm__ __volatile__ (
 			"ldst %0, %1"
 			: "+r" ((unsigned long){x?--srcidx:srcidx++})
-			: "r" (addr+HWDRVBLKDEV_READ));
+			: "r" (addr+HWDRVBLKDEV_READ)
+			: "memory");
 		// Read status until ready is returned.
 		signed long isrdy;
 		do {
@@ -206,7 +216,8 @@ static unsigned long hwdrvblkdev_cpy (hwdrvblkdev *dev, unsigned long dstidx, un
 		__asm__ __volatile__ (
 			"ldst %0, %1"
 			: "+r" ((unsigned long){x?--dstidx:dstidx++})
-			: "r" (addr+HWDRVBLKDEV_WRITE));
+			: "r" (addr+HWDRVBLKDEV_WRITE)
+			: "memory");
 		// Read status until ready is returned.
 		do {
 			if ((isrdy = hwdrvblkdev_isrdy (dev)) < 0)
