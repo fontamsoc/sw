@@ -13,7 +13,7 @@ ENTRY(_start)
 
 MBR_BOOTCODE_SIZE = 446;
 MBR_BOOTCODE_SIZE = (MBR_BOOTCODE_SIZE - (MBR_BOOTCODE_SIZE % 8)); /* Align to 64bits */
-BLKDEV_READ_FUNC_SIZE = 24; /* obtained from `pu32-elf-readelf -a` */
+BLKDEV_READ_FUNC_SIZE = 26; /* obtained from `pu32-elf-readelf -a` */
 BLKDEV_READ_FUNC_ADDR = (MBR_BOOTCODE_SIZE - BLKDEV_READ_FUNC_SIZE);
 BLKDEV_READ_FUNC_ADDR = (BLKDEV_READ_FUNC_ADDR - (BLKDEV_READ_FUNC_ADDR % 8)); /* Align to 64bits */
 

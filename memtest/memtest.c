@@ -46,8 +46,9 @@ __asm__ (
 	//#define DEBUG_KERNELMODE
 
 	#ifdef DEBUG_KERNELMODE
-	#define HWDRVCHAR_CMDGETBUFFERUSAGE 0
+	#define HWDRVCHAR_CMDGETBUFFERUSAGE 0 # TODO: difference value needed ...
 	"80: li %2, "__xstr__(UARTADDR)"\n"
+	// TODO: Should not be enabled due to uart device changes ...
 	"li %1, "__xstr__((HWDRVCHAR_CMDGETBUFFERUSAGE<<30) | 1)"\n"
 	"ldst %1, %2\n"
 	"rli %sr, 80b; jnz %1, %sr\n"
@@ -84,6 +85,7 @@ __asm__ (
 
 	#ifdef DEBUG_KERNELMODE
 	"80: li %2, "__xstr__(UARTADDR)"\n"
+	// TODO: Should not be enabled due to uart device changes ...
 	"li %1, "__xstr__((HWDRVCHAR_CMDGETBUFFERUSAGE<<30) | 1)"\n"
 	"ldst %1, %2\n"
 	"rli %sr, 80b; jnz %1, %sr\n"

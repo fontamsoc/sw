@@ -137,8 +137,6 @@ void *u8cpy (void *dst, const void *src, unsigned long cnt); __asm__ (
 #include <hwdrvdevtbl/hwdrvdevtbl.h>
 hwdrvdevtbl hwdrvdevtbl_ram = {.e = (devtblentry *)0, .id = 1 /* RAM device */};
 
-#include <hwdrvintctrl/hwdrvintctrl.h>
-
 typedef unsigned long size_t;
 
 void *memcpy (void *dst, const void *src, size_t cnt) {
@@ -262,12 +260,13 @@ __attribute__((noreturn)) void main (void) {
 
 	hwdrvchar_init (&hwdrvchar_dev, UARTBAUD);
 
-	unsigned long socversion = 0;
+	unsigned long socversion = (HWDRVDEVTBLADDR+(0*__SIZEOF_POINTER__))/* SOCVERSION */;
 	__asm__ __volatile__ (
-		"ldst %0, %1"
+		"li8 %%sr, 4\n" /* RDSELINFO */
+		"stv %%sr, %0\n"
+		"ldv %0, %0\n"
 		: "+r" (socversion)
-		: "r"  (DEVTBLADDR)
-		: "memory");
+		:: "memory");
 	puts("\r\nsoc  "); puts_hex(socversion); puts("\r\n");
 
 	puts(BIOSVERSION);
@@ -873,9 +872,9 @@ savedkctx * syscallhdlr (savedkctx *kctx, unsigned long _) {
 				__asm__ __volatile__ ("setkgpr %0, %%1\n" : "=r"(r1));
 
 			__asm__ __volatile__ (
-				"ldst %0, %1"
-				: "+r" (r1)
-				: "r"  (DEVTBLADDR+sizeof(unsigned long))
+				"stv %0, %1\n"
+				:: "r" (r1 > 2 ? 0 : r1),
+				   "r" (HWDRVDEVTBLADDR)
 				: "memory");
 
 			goto done;

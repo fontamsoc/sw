@@ -2,5 +2,5 @@
 // (c) William Fonkou Tambe
 
 #define STACKSZ		128 /* computed from -fstack-usage outputs */
-#define UARTADDR	(0x0ff8 /* By convention, the first UART is located at 0x0ff8 */)
+#define UARTADDR	(0x0ff0 /* By convention, the first UART is located at 0x0ff0 */)
 #define UARTBAUD	115200

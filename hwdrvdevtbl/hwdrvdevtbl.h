@@ -11,9 +11,9 @@
 typedef struct {
 	unsigned long id;
 	struct {
-		unsigned long useintr	:1;
-		unsigned long _		:1;
-		unsigned long mapsz	:((8*sizeof(unsigned long))-(
+		unsigned long useintr :1;
+		unsigned long _ :1;
+		unsigned long mapsz :((8*sizeof(unsigned long)) - (
 			(sizeof(unsigned long) == 2) ? 1 :
 			(sizeof(unsigned long) == 4) ? 2 : 3));
 	};
@@ -28,6 +28,8 @@ typedef struct {
 	                     // mapping occupies in the address space.
 	signed long intridx; // Index of the device within the interrupt controller.
 } hwdrvdevtbl;
+
+#define HWDRVDEVTBLADDR (0x400 /* By convention, the device table is located at 0x400 */)
 
 // Search the device table for a device.
 // The fields dev->e and dev->id must be properly set before calling this function.
@@ -47,6 +49,12 @@ static void hwdrvdevtbl_find (hwdrvdevtbl *dev, unsigned long (*cb)(hwdrvdevtbl 
 	hwdrvdevtbl ddev;
 	unsigned long intridx;
 
+	__asm__ __volatile__ (
+		"li8 %%sr, 5\n" /* RDSELDEVS */
+		"stv %%sr, %0\n"
+		:: "r" ((unsigned long)dev->e ?: HWDRVDEVTBLADDR)
+		: "memory");
+
 	if (dev->e) {
 
 		ddev = *dev;
@@ -56,7 +64,7 @@ static void hwdrvdevtbl_find (hwdrvdevtbl *dev, unsigned long (*cb)(hwdrvdevtbl 
 
 	} else {
 
-		d = (devtblentry *)0x200; // By convention, the device table is located at 0x200.
+		d = (devtblentry *)HWDRVDEVTBLADDR;
 
 		// Interrupt 0 is always in used and must be assumed
 		// assigned to a block device mapped at address 0x0.

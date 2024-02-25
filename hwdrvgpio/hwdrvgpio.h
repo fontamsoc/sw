@@ -23,23 +23,39 @@ typedef struct {
 // 0/1 configures corresponding IO as an input/output.
 // dev->iocnt gets set.
 static inline void hwdrvgpio_configureio (hwdrvgpio *dev, unsigned long arg) {
-	dev->iocnt = ((HWDRVGPIO_CMDCONFIGUREIO<<((sizeof(unsigned long)*8)-1))|(arg&(((unsigned long)1<<((sizeof(unsigned long)*8)-1))-1)));
+	void* addr = dev->addr;
 	__asm__ __volatile__ (
-		"ldst %0, %1"
-		: "+r" (dev->iocnt)
-		: "r" (dev->addr)
+		"stv %0, %1"
+		:: "r" ((HWDRVGPIO_CMDCONFIGUREIO<<((sizeof(unsigned long)*8)-1))|(arg&(((unsigned long)1<<((sizeof(unsigned long)*8)-1))-1))),
+		   "r" (addr+8)
+		:  "memory");
+	unsigned long data;
+	do __asm__ __volatile__ (
+		"ldv %0, %1"
+		: "=r" (data)
+		: "r"  (addr+8)
 		: "memory");
+	while ((data>>((sizeof(unsigned long)*8)-1)) != HWDRVGPIO_CMDCONFIGUREIO);
+	dev->iocnt = (data & (((unsigned long)1<<((sizeof(unsigned long)*8)-1))-1));
 }
 
 // Configure clockcycle count ("arg") used to debounce inputs.
 // dev->clkfreq gets set.
 static inline void hwdrvgpio_setdebounce (hwdrvgpio *dev, unsigned long arg) {
-	dev->clkfreq = ((HWDRVGPIO_CMDSETDEBOUNCE<<((sizeof(unsigned long)*8)-1))|(arg&(((unsigned long)1<<((sizeof(unsigned long)*8)-1))-1)));
+	void* addr = dev->addr;
 	__asm__ __volatile__ (
-		"ldst %0, %1"
-		: "+r" (dev->clkfreq)
-		: "r" (dev->addr)
+		"stv %0, %1"
+		:: "r" ((HWDRVGPIO_CMDSETDEBOUNCE<<((sizeof(unsigned long)*8)-1))|(arg&(((unsigned long)1<<((sizeof(unsigned long)*8)-1))-1))),
+		   "r" (addr+8)
+		:  "memory");
+	unsigned long data;
+	do __asm__ __volatile__ (
+		"ldv %0, %1"
+		: "=r" (data)
+		: "r"  (addr+8)
 		: "memory");
+	while ((data>>((sizeof(unsigned long)*8)-1)) != HWDRVGPIO_CMDSETDEBOUNCE);
+	dev->clkfreq = (data & (((unsigned long)1<<((sizeof(unsigned long)*8)-1))-1));
 }
 
 #endif /* HWDRVGPIO_H */

@@ -22,8 +22,9 @@ __asm__ (
 	"_start:\n"
 
 	// Adjust %ksl to enable caching throughout the memory
-	// region where the loader and BIOS will be running.
-	"li %sr, ("__xstr__(KSLVAL)")\n"
+	// region where the loader and BIOS will be running, as
+	// well as early kernel instructions.
+	"li %sr, ("__xstr__(KERNELADDR*2)")\n"
 	"setksl %sr\n"
 	// Initialize %sp and %fp.
 	"rli16 %sp, stack + "__xstr__(STACKSZ)"\n"
@@ -60,10 +61,10 @@ void *uintcpy (void *dst, void *src, unsigned long cnt); __asm__ (
 	".size    uintcpy, (. - uintcpy)\n");
 
 // Block device commands.
-#define BLKDEV_RESET	0
-#define BLKDEV_SWAP	1
-#define BLKDEV_READ	2
-#define BLKDEV_WRITE	3
+#define BLKDEV_RESET ((0*__SIZEOF_POINTER__)+512)
+#define BLKDEV_SWAP  ((1*__SIZEOF_POINTER__)+512)
+#define BLKDEV_READ  ((2*__SIZEOF_POINTER__)+512)
+#define BLKDEV_WRITE ((3*__SIZEOF_POINTER__)+512)
 // Read the block at idx and present it at BLKDEVADDR.
 // Note that BLKDEV_READ_SIZE in linker script is affected by BLKDEVADDR.
 // blkdev_read() must be identical in all chained loaders.
@@ -75,27 +76,26 @@ void blkdev_read (unsigned long idx); __asm__ (
 	"blkdev_read:\n"
 
 	// Load block with index in %1.
-	"li8 %2, "__xstr__(BLKDEV_READ)"*"__xstr__(__SIZEOF_POINTER__)"\n"
+	"li16 %2, "__xstr__(BLKDEV_READ)"\n"
 	#if BLKDEVADDR != 0
 	"inc %2, "__xstr__(BLKDEVADDR)"\n"
 	#endif
-	"ldst %1, %2\n" // Initiate the block loading.
+	"stv %1, %2\n" // Initiate block loading.
 	// Wait for block load.
-	"li8 %2, "__xstr__(BLKDEV_RESET)"*"__xstr__(__SIZEOF_POINTER__)"\n"
+	"li16 %2, "__xstr__(BLKDEV_RESET)"\n"
 	#if BLKDEVADDR != 0
 	"inc %2, "__xstr__(BLKDEVADDR)"\n"
 	#endif
 	"rli8 %sr, 0f\n"
-	"0: li8 %1, 0\n" // Set null to prevent reset when reading status.
-	"ldst %1, %2\n" // Read status.
+	"0: ldv %1, %2\n" // Read status.
 	"inc8 %1, -1\n" // Will set null if status was 1 (READY).
 	"jnz %1, %sr\n"
-	// Present the loaded block in the physical memory.
-	"li8 %2, "__xstr__(BLKDEV_SWAP)"*"__xstr__(__SIZEOF_POINTER__)"\n"
+	// Present loaded block in the physical memory.
+	"li16 %2, "__xstr__(BLKDEV_SWAP)"\n"
 	#if BLKDEVADDR != 0
 	"inc %2, "__xstr__(BLKDEVADDR)"\n"
 	#endif
-	"ldst %1, %2\n"
+	"stv %1, %2\n"
 	#if BLKDEVADDR != 0
 	"j %rp\n"
 	#else /* for case where return address is 0, since j %rp is encoded as jnz %rp, %rp */
@@ -129,11 +129,13 @@ __attribute__((noreturn)) void main (void) {
 	#define LDRMEMINIT
 	#ifdef LDRMEMINIT
 	// Initialize and test memory.
-	unsigned x = 3 /* PRELDRADDR */;
+	unsigned x = (DEVTBLADDR+(3*__SIZEOF_POINTER__))/* PRELDRADDR */;
 	__asm__ __volatile__ (
-		"ldst %0, %1"
+		"li8 %%sr, 4\n" /* RDSELINFO */
+		"stv %%sr, %0\n"
+		"ldv %0, %0\n"
 		: "+r" (x)
-		: "r"  (DEVTBLADDR));
+		:: "memory");
 	if (x) {
 		__asm__ __volatile__ (
 			"rli16 %%sr, saved_sp\n"
@@ -146,13 +148,17 @@ __attribute__((noreturn)) void main (void) {
 			"ld %%sp, %%sr\n"
 			::: "memory");
 		__asm__ __volatile__ (
-			"li8 %%sr, 3 /* RRESET */; ldst %%sr, %0"
-			:: "r" (DEVTBLADDR+sizeof(unsigned long)));
-		x = 1 /* RAMCACHESZ */;
+			"li8 %%sr, 3\n" /* RRESET */
+			"stv %%sr, %0\n"
+			:: "r" (DEVTBLADDR)
+			: "memory");
+		x = (DEVTBLADDR+(1*__SIZEOF_POINTER__))/* RAMCACHESZ */;
 		__asm__ __volatile__ (
-			"ldst %0, %1"
+			"li8 %%sr, 4\n" /* RDSELINFO */
+			"stv %%sr, %0\n"
+			"ldv %0, %0\n"
 			: "+r" (x)
-			: "r"  (DEVTBLADDR));
+			:: "memory");
 		x *= (4 /* Test more than the RAM cache to guaranty actual RAM access */ * sizeof(unsigned long));
 		for (v = 0; v < x; v += sizeof(unsigned long)) {
 			unsigned w = (KERNELADDR + v);
@@ -168,8 +174,12 @@ __attribute__((noreturn)) void main (void) {
 				: "r"  (w));
 			if (w != u) {
 				__asm__ __volatile__ (
-					"li8 %%sr, 2 /* CRESET */; ldst %%sr, %0; rli8 %%sr, 0f; 0: j %%sr"
-					:: "r" (DEVTBLADDR+sizeof(unsigned long)));
+					"li8 %%sr, 2\n" /* CRESET */
+					"stv %%sr, %0\n"
+					"rli8 %%sr, 0f\n"
+					"0: j %%sr\n"
+					:: "r" (DEVTBLADDR)
+					: "memory");
 			}
 		}
 	}
